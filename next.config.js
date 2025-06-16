@@ -8,13 +8,62 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  webpack: (config, { dev }) => {
+  webpack: (config, { dev, isServer }) => {
     if (dev) {
       config.watchOptions = {
         poll: 1000,
         aggregateTimeout: 300,
       };
     }
+
+    // Optimize webpack cache for large files
+    config.cache = {
+      ...config.cache,
+      maxMemoryGenerations: 1,
+      memoryCacheUnaffected: true,
+      type: "filesystem",
+      cacheDirectory: ".next/cache/webpack",
+      compression: "gzip",
+      hashAlgorithm: "xxhash64",
+      store: "pack",
+      idleTimeout: 60000,
+      idleTimeoutForInitialStore: 0,
+      idleTimeoutAfterLargeChanges: 1000,
+      // Optimize for large strings
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+      allowCollectingMemory: true,
+    };
+
+    // Optimize module resolution for large files
+    config.optimization = {
+      ...config.optimization,
+      moduleIds: "deterministic",
+      splitChunks: {
+        chunks: "all",
+        cacheGroups: {
+          default: {
+            minChunks: 2,
+            priority: -20,
+            reuseExistingChunk: true,
+          },
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: "vendors",
+            priority: -10,
+            chunks: "all",
+          },
+          // Split large components into separate chunks
+          largeComponents: {
+            test: /[\\/]src[\\/](components|app)[\\/].*\.(tsx|ts)$/,
+            name: "large-components",
+            priority: 0,
+            chunks: "all",
+            minSize: 50000, // 50KB
+          },
+        },
+      },
+    };
+
     return config;
   },
 
