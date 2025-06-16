@@ -9,55 +9,24 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  experimental: {
+    // Optimize large package imports
+    optimizePackageImports: [
+      "recharts",
+      "@radix-ui/react-icons",
+      "lucide-react",
+    ],
+  },
   webpack: (config, { dev, isServer }) => {
     if (dev) {
       config.watchOptions = {
         poll: 1000,
         aggregateTimeout: 300,
       };
-    }
 
-    // Optimize webpack cache for large files
-    if (config.cache && typeof config.cache === "object") {
-      config.cache = {
-        ...config.cache,
-        type: "filesystem",
-        cacheDirectory: path.resolve(__dirname, ".next/cache/webpack"),
-        compression: "gzip",
-        hashAlgorithm: "xxhash64",
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-      };
+      // Disable cache in development to avoid serialization issues
+      config.cache = false;
     }
-
-    // Optimize module resolution for large files
-    config.optimization = {
-      ...config.optimization,
-      moduleIds: "deterministic",
-      splitChunks: {
-        chunks: "all",
-        cacheGroups: {
-          default: {
-            minChunks: 2,
-            priority: -20,
-            reuseExistingChunk: true,
-          },
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name: "vendors",
-            priority: -10,
-            chunks: "all",
-          },
-          // Split large components into separate chunks
-          largeComponents: {
-            test: /[\\/]src[\\/](components|app)[\\/].*\.(tsx|ts)$/,
-            name: "large-components",
-            priority: 0,
-            chunks: "all",
-            minSize: 50000, // 50KB
-          },
-        },
-      },
-    };
 
     return config;
   },

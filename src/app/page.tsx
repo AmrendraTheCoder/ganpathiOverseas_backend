@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,31 @@ import {
   Pie,
   ComposedChart,
 } from "recharts";
+
+// Dynamic imports for large components to reduce initial bundle size
+const DashboardCharts = dynamic(
+  () => import("@/components/dashboard/DashboardCharts"),
+  {
+    loading: () => (
+      <div className="h-64 bg-gray-100 animate-pulse rounded-lg" />
+    ),
+    ssr: false,
+  }
+);
+
+const DashboardStats = dynamic(
+  () => import("@/components/dashboard/DashboardStats"),
+  {
+    loading: () => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="h-32 bg-gray-100 animate-pulse rounded-lg" />
+        ))}
+      </div>
+    ),
+    ssr: false,
+  }
+);
 
 interface DashboardStats {
   totalJobSheets: number;
