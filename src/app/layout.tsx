@@ -4,13 +4,13 @@ import "./globals.css";
 import Script from "next/script";
 import { TempoInit } from "@/components/tempo-init";
 import { ThemeProvider } from "@/components/theme-provider";
-import { TopNav } from "@/components/top-nav";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Job Sheet | Ganpathi Overseas",
-  description: "Job Sheet Management System",
+  title: "Ganpathi Overseas - Job Management System",
+  description: "Enterprise Job Sheet Management System for Ganpathi Overseas",
 };
 
 export default function RootLayout({
@@ -28,15 +28,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="flex flex-col h-screen bg-white">
-            {/* Top Navigation */}
-            <TopNav />
-
-            {/* Main Content */}
-            <main className="flex-1 overflow-y-auto bg-white p-4 lg:p-6">
-              <div className="w-full max-w-7xl mx-auto">{children}</div>
-            </main>
-          </div>
+          <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
         <TempoInit />
       </body>
