@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+const path = require("path");
 
 const nextConfig = {
   images: {
@@ -17,22 +18,16 @@ const nextConfig = {
     }
 
     // Optimize webpack cache for large files
-    config.cache = {
-      ...config.cache,
-      maxMemoryGenerations: 1,
-      memoryCacheUnaffected: true,
-      type: "filesystem",
-      cacheDirectory: ".next/cache/webpack",
-      compression: "gzip",
-      hashAlgorithm: "xxhash64",
-      store: "pack",
-      idleTimeout: 60000,
-      idleTimeoutForInitialStore: 0,
-      idleTimeoutAfterLargeChanges: 1000,
-      // Optimize for large strings
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-      allowCollectingMemory: true,
-    };
+    if (config.cache && typeof config.cache === "object") {
+      config.cache = {
+        ...config.cache,
+        type: "filesystem",
+        cacheDirectory: path.resolve(__dirname, ".next/cache/webpack"),
+        compression: "gzip",
+        hashAlgorithm: "xxhash64",
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+      };
+    }
 
     // Optimize module resolution for large files
     config.optimization = {
