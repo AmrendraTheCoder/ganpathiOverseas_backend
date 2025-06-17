@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -28,8 +28,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Clock, Factory, CheckCircle, AlertCircle, Play } from "lucide-react";
+import {
+  Clock,
+  Factory,
+  CheckCircle,
+  AlertCircle,
+  Play,
+  RefreshCw,
+  Pause,
+} from "lucide-react";
 import DashboardLayout from "@/app/dashboard/layout";
+import { formatDate } from "@/lib/utils";
 
 interface Job {
   id: number;
@@ -70,6 +79,8 @@ export default function JobProgress() {
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(true);
 
   // Progress form state
   const [progressData, setProgressData] = useState<ProgressUpdate>({
@@ -93,30 +104,48 @@ export default function JobProgress() {
     "completed",
   ];
 
-  useEffect(() => {
-    fetchJobs();
-  }, []);
+  // Real-time data fetching function
+  const fetchJobs = useCallback(
+    async (showLoadingState = false) => {
+      try {
+        if (showLoadingState) setLoading(true);
 
-  const fetchJobs = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `/api/operator/jobs?operatorId=${operatorId}`
-      );
-      const data = await response.json();
+        const response = await fetch(
+          `/api/operator/jobs?operatorId=${operatorId}&timestamp=${Date.now()}`
+        );
+        const data = await response.json();
 
-      if (response.ok) {
-        setJobs(data.jobs || []);
-        setError(null);
-      } else {
-        setError(data.error || "Failed to fetch jobs");
+        if (response.ok) {
+          setJobs(data.jobs || []);
+          setError(null);
+          setLastUpdated(new Date());
+        } else {
+          setError(data.error || "Failed to fetch jobs");
+        }
+      } catch (err) {
+        setError("Network error occurred");
+      } finally {
+        if (showLoadingState) setLoading(false);
       }
-    } catch (err) {
-      setError("Network error occurred");
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [operatorId]
+  );
+
+  // Initial fetch
+  useEffect(() => {
+    fetchJobs(true);
+  }, [fetchJobs]);
+
+  // Real-time updates every 10 seconds
+  useEffect(() => {
+    if (!isRealTimeEnabled) return;
+
+    const interval = setInterval(() => {
+      fetchJobs(false); // Don't show loading state for real-time updates
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
+  }, [fetchJobs, isRealTimeEnabled]);
 
   const selectJob = (job: Job) => {
     setSelectedJob(job);
@@ -154,7 +183,7 @@ export default function JobProgress() {
         });
 
         if (response.ok) {
-          await fetchJobs();
+          await fetchJobs(false);
           setSelectedJob(null);
           setShowUpdateModal(false);
         }
@@ -174,7 +203,7 @@ export default function JobProgress() {
 
         // In a real app, you'd have a separate API for progress updates
         // For now, we'll just refresh the jobs
-        await fetchJobs();
+        await fetchJobs(false);
         setShowUpdateModal(false);
       }
     } catch (err) {
@@ -184,17 +213,91 @@ export default function JobProgress() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "in_progress":
-        return "bg-blue-500";
+  // Enhanced color schemes for different job purposes/statuses
+  const getJobCardTheme = (job: Job) => {
+    const isPriority = job.priority >= 3;
+    const isUrgent =
+      new Date(job.due_date) <= new Date(Date.now() + 24 * 60 * 60 * 1000); // Due within 24 hours
+
+    switch (job.status) {
       case "pending":
-        return "bg-yellow-500";
+        return {
+          cardBg: isPriority
+            ? "bg-amber-50 border-amber-200"
+            : "bg-blue-50 border-blue-200",
+          headerBg: isPriority ? "bg-amber-100" : "bg-blue-100",
+          badgeColor: isPriority ? "bg-amber-500" : "bg-blue-500",
+          accent: isPriority ? "text-amber-700" : "text-blue-700",
+        };
+      case "in_progress":
+        return {
+          cardBg: isUrgent
+            ? "bg-orange-50 border-orange-200"
+            : "bg-green-50 border-green-200",
+          headerBg: isUrgent ? "bg-orange-100" : "bg-green-100",
+          badgeColor: isUrgent ? "bg-orange-500" : "bg-green-500",
+          accent: isUrgent ? "text-orange-700" : "text-green-700",
+        };
       case "completed":
-        return "bg-green-500";
+        return {
+          cardBg: "bg-emerald-50 border-emerald-200",
+          headerBg: "bg-emerald-100",
+          badgeColor: "bg-emerald-500",
+          accent: "text-emerald-700",
+        };
       default:
-        return "bg-gray-500";
+        return {
+          cardBg: "bg-gray-50 border-gray-200",
+          headerBg: "bg-gray-100",
+          badgeColor: "bg-gray-500",
+          accent: "text-gray-700",
+        };
     }
+  };
+
+  const getPriorityBadge = (priority: number) => {
+    if (priority >= 3)
+      return {
+        text: "High Priority",
+        color: "bg-red-100 text-red-800 border-red-300",
+      };
+    if (priority >= 2)
+      return {
+        text: "Medium Priority",
+        color: "bg-yellow-100 text-yellow-800 border-yellow-300",
+      };
+    return {
+      text: "Normal Priority",
+      color: "bg-green-100 text-green-800 border-green-300",
+    };
+  };
+
+  const getUrgencyIndicator = (dueDate: string) => {
+    const due = new Date(dueDate);
+    const now = new Date();
+    const hoursLeft = (due.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (hoursLeft <= 24 && hoursLeft > 0) {
+      return {
+        text: "Due Soon",
+        color: "bg-red-100 text-red-800 border-red-300",
+      };
+    }
+    if (hoursLeft <= 0) {
+      return {
+        text: "Overdue",
+        color: "bg-red-200 text-red-900 border-red-400",
+      };
+    }
+    return null;
+  };
+
+  const toggleRealTime = () => {
+    setIsRealTimeEnabled(!isRealTimeEnabled);
+  };
+
+  const manualRefresh = () => {
+    fetchJobs(false);
   };
 
   if (loading) {
@@ -210,18 +313,61 @@ export default function JobProgress() {
   return (
     <DashboardLayout>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          Job Progress Tracking
-        </h1>
-        <p className="text-gray-600">
-          Update progress and manage job completion
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Job Progress Tracking
+            </h1>
+            <p className="text-gray-600">
+              Update progress and manage job completion
+            </p>
+          </div>
+
+          {/* Real-time controls */}
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-gray-500">
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </div>
+            <Button
+              onClick={manualRefresh}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            <Button
+              onClick={toggleRealTime}
+              variant={isRealTimeEnabled ? "default" : "outline"}
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              {isRealTimeEnabled ? (
+                <Pause className="h-4 w-4" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              {isRealTimeEnabled ? "Pause" : "Enable"} Real-time
+            </Button>
+          </div>
+        </div>
+
+        {/* Real-time indicator */}
+        {isRealTimeEnabled && (
+          <div className="flex items-center gap-2 mt-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-sm text-green-600">
+              Real-time updates enabled
+            </span>
+          </div>
+        )}
       </div>
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-600">Error: {error}</p>
-          <Button onClick={fetchJobs} className="mt-2" size="sm">
+          <Button onClick={() => fetchJobs(false)} className="mt-2" size="sm">
             Retry
           </Button>
         </div>
@@ -230,7 +376,7 @@ export default function JobProgress() {
       <div className="grid gap-6">
         {/* Jobs List */}
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Active Jobs</h2>
+          <h2 className="text-lg font-semibold">Active Jobs ({jobs.length})</h2>
           {jobs.length === 0 ? (
             <Card>
               <CardContent className="flex items-center justify-center py-8">
@@ -242,96 +388,131 @@ export default function JobProgress() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {jobs.map((job) => (
-                <Card
-                  key={job.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow"
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-base">{job.title}</CardTitle>
-                        <CardDescription className="text-sm">
-                          Job #{job.job_number}
-                        </CardDescription>
-                      </div>
-                      <Badge
-                        className={`${getStatusColor(job.status)} text-white`}
-                      >
-                        {job.status.replace("_", " ")}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-gray-500">Quantity:</span>
-                        <p className="font-medium">
-                          {job.quantity.toLocaleString()}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Due Date:</span>
-                        <p className="font-medium">
-                          {new Date(job.due_date).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
+              {jobs.map((job) => {
+                const theme = getJobCardTheme(job);
+                const priority = getPriorityBadge(job.priority);
+                const urgency = getUrgencyIndicator(job.due_date);
 
-                    <div className="space-y-2">
-                      <div className="text-sm">
-                        <span className="text-gray-500">Client:</span>
-                        <p className="font-medium">{job.parties.name}</p>
+                return (
+                  <Card
+                    key={job.id}
+                    className={`cursor-pointer hover:shadow-lg transition-all duration-200 border-2 ${theme.cardBg}`}
+                  >
+                    <CardHeader
+                      className={`pb-3 ${theme.headerBg} rounded-t-lg`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <CardTitle className={`text-base ${theme.accent}`}>
+                            {job.title}
+                          </CardTitle>
+                          <CardDescription className="text-sm font-medium">
+                            Job #{job.job_number}
+                          </CardDescription>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <Badge
+                            className={`${theme.badgeColor} text-white text-xs`}
+                          >
+                            {job.status.replace("_", " ")}
+                          </Badge>
+                        </div>
                       </div>
 
-                      {job.machines && (
-                        <div className="text-sm">
-                          <span className="text-gray-500">Machine:</span>
-                          <p className="font-medium flex items-center">
-                            <Factory className="h-4 w-4 mr-1" />
-                            {job.machines.name}
+                      {/* Priority and urgency indicators */}
+                      <div className="flex gap-2 flex-wrap">
+                        <Badge
+                          variant="outline"
+                          className={`text-xs ${priority.color}`}
+                        >
+                          {priority.text}
+                        </Badge>
+                        {urgency && (
+                          <Badge
+                            variant="outline"
+                            className={`text-xs ${urgency.color}`}
+                          >
+                            {urgency.text}
+                          </Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-gray-500">Quantity:</span>
+                          <p className={`font-medium ${theme.accent}`}>
+                            {job.quantity.toLocaleString()}
                           </p>
                         </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-sm">
-                        <span className="text-gray-500">Specifications:</span>
-                        <p className="text-xs">
-                          {job.colors} • {job.paper_type} • {job.paper_size}
-                        </p>
+                        <div>
+                          <span className="text-gray-500">Due Date:</span>
+                          <p className={`font-medium ${theme.accent}`}>
+                            {formatDate(job.due_date)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="pt-2">
-                      <Button
-                        onClick={() => selectJob(job)}
-                        className="w-full"
-                        variant={
-                          job.status === "pending" ? "default" : "outline"
-                        }
-                      >
-                        {job.status === "pending" && (
-                          <Play className="h-4 w-4 mr-2" />
-                        )}
-                        {job.status === "completed" && (
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                        )}
-                        {job.status === "in_progress" && (
-                          <Clock className="h-4 w-4 mr-2" />
-                        )}
+                      <div className="space-y-2">
+                        <div className="text-sm">
+                          <span className="text-gray-500">Client:</span>
+                          <p className={`font-medium ${theme.accent}`}>
+                            {job.parties.name}
+                          </p>
+                        </div>
 
-                        {job.status === "pending"
-                          ? "Start Job"
-                          : job.status === "completed"
-                            ? "View Details"
-                            : "Update Progress"}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                        {job.machines && (
+                          <div className="text-sm">
+                            <span className="text-gray-500">Machine:</span>
+                            <p
+                              className={`font-medium flex items-center ${theme.accent}`}
+                            >
+                              <Factory className="h-4 w-4 mr-1" />
+                              {job.machines.name}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="text-sm">
+                          <span className="text-gray-500">Specifications:</span>
+                          <p className="text-xs text-gray-600">
+                            {job.colors} • {job.paper_type} • {job.paper_size}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <Button
+                          onClick={() => selectJob(job)}
+                          className={`w-full ${theme.badgeColor} hover:opacity-90`}
+                          variant={
+                            job.status === "pending" ? "default" : "outline"
+                          }
+                        >
+                          {job.status === "pending" && (
+                            <Play className="h-4 w-4 mr-2" />
+                          )}
+                          {job.status === "completed" && (
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                          )}
+                          {job.status === "in_progress" && (
+                            <Clock className="h-4 w-4 mr-2" />
+                          )}
+
+                          {job.status === "pending"
+                            ? "Start Job"
+                            : job.status === "completed"
+                              ? "View Details"
+                              : "Update Progress"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
@@ -447,4 +628,4 @@ export default function JobProgress() {
       </Dialog>
     </DashboardLayout>
   );
-} 
+}

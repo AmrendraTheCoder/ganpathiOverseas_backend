@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const searchParams = request.nextUrl.searchParams;
     const operatorId = searchParams.get("operatorId");
+    const includeCompleted = searchParams.get("includeCompleted") === "true";
 
     if (!operatorId) {
       return NextResponse.json(
@@ -13,6 +14,11 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Determine which statuses to include
+    const statusFilter = includeCompleted 
+      ? ["pending", "in_progress", "completed"]
+      : ["pending", "in_progress"];
 
     // Fetch jobs assigned to the operator with related data
     const { data: jobs, error } = await supabase
@@ -30,7 +36,7 @@ export async function GET(request: NextRequest) {
       `
       )
       .eq("assigned_to", operatorId)
-      .in("status", ["pending", "in_progress"])
+      .in("status", statusFilter)
       .order("priority", { ascending: false })
       .order("due_date", { ascending: true });
 
@@ -105,7 +111,25 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case "start_job":
-        // Start a job - update status and create time log
+        // Check if operator already has an active time log
+        const { data: existingActiveLog } = await supabase
+          .from("time_logs")
+          .select("id")
+          .eq("operator_id", operatorId)
+          .is("ended_at", null)
+          .single();
+
+        if (existingActiveLog) {
+          return NextResponse.json(
+            {
+              error:
+                "You already have an active time log. Please clock out first.",
+            },
+            { status: 400 }
+          );
+        }
+
+        // Start the job - update status
         const { error: startError } = await supabase
           .from("job_sheets")
           .update({
@@ -122,18 +146,20 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Try to create time log entry if time_logs table exists
-        try {
-          await supabase.from("time_logs").insert({
-            job_sheet_id: jobId,
+        // Create time log entry
+        const { error: timeLogError } = await supabase
+          .from("time_logs")
+          .insert({
+            job_id: jobId,
             operator_id: operatorId,
-            machine_id: data?.machineId,
-            clock_in: new Date().toISOString(),
+            machine_id: data?.machineId || null,
+            started_at: new Date().toISOString(),
             notes: data?.notes || "Job started",
           });
-        } catch (timeLogError) {
-          // Don't fail the request if time_logs doesn't exist
-          console.warn("Time logs not available:", timeLogError);
+
+        if (timeLogError) {
+          console.warn("Failed to create time log:", timeLogError);
+          // Don't fail the request if time log creation fails
         }
 
         return NextResponse.json({
@@ -142,6 +168,25 @@ export async function POST(request: NextRequest) {
         });
 
       case "pause_job":
+        // Clock out of current time log if active
+        const { data: activeTimeLog } = await supabase
+          .from("time_logs")
+          .select("*")
+          .eq("operator_id", operatorId)
+          .eq("job_id", jobId)
+          .is("ended_at", null)
+          .single();
+
+        if (activeTimeLog) {
+          await supabase
+            .from("time_logs")
+            .update({
+              ended_at: new Date().toISOString(),
+              notes: `${activeTimeLog.notes}\nJob paused`,
+            })
+            .eq("id", activeTimeLog.id);
+        }
+
         // Update job status to pending
         const { error: pauseError } = await supabase
           .from("job_sheets")
@@ -164,6 +209,26 @@ export async function POST(request: NextRequest) {
         });
 
       case "complete_job":
+        // Clock out of current time log if active
+        const { data: completeActiveLog } = await supabase
+          .from("time_logs")
+          .select("*")
+          .eq("operator_id", operatorId)
+          .eq("job_id", jobId)
+          .is("ended_at", null)
+          .single();
+
+        if (completeActiveLog) {
+          await supabase
+            .from("time_logs")
+            .update({
+              ended_at: new Date().toISOString(),
+              notes: `${completeActiveLog.notes}\nJob completed`,
+              productivity_score: data?.productivityScore || 8,
+            })
+            .eq("id", completeActiveLog.id);
+        }
+
         // Complete job
         const { error: completeError } = await supabase
           .from("job_sheets")

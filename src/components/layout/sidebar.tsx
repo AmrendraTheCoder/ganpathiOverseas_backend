@@ -517,24 +517,6 @@ const getRoleBasedNavigation = (userRole: string): NavItem[] => {
             },
           ],
         },
-        {
-          title: "Production",
-          icon: Factory,
-          items: [
-            {
-              title: "Machines",
-              href: "/machines",
-              icon: Printer,
-              description: "Machine status",
-            },
-            {
-              title: "Quality Control",
-              href: "/production/quality",
-              icon: Target,
-              description: "Quality checks",
-            },
-          ],
-        },
       ];
 
     default:

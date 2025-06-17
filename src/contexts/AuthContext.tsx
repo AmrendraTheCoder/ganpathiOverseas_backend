@@ -17,20 +17,42 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Data migration function to fix old cached user IDs
+const migrateUserData = (userData: any): User | null => {
+  if (!userData) return null;
+  
+  // If user has old ID format, clear the cache and return null
+  if (userData.id === "4" || userData.id === "5" || typeof userData.id === "number") {
+    console.log("🔄 Migrating old user data format, clearing cache...");
+    localStorage.removeItem("currentUser");
+    sessionStorage.clear();
+    return null;
+  }
+  
+  return userData as User;
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    // Check for saved user session
+    // Check for saved user session with migration
     const savedUser = localStorage.getItem("currentUser");
     if (savedUser) {
       try {
-        setUser(JSON.parse(savedUser));
+        const parsedUser = JSON.parse(savedUser);
+        const migratedUser = migrateUserData(parsedUser);
+        if (migratedUser) {
+          setUser(migratedUser);
+        } else {
+          console.log("🧹 Old user data cleared, please login again");
+        }
       } catch (error) {
         console.error("Error parsing saved user:", error);
         localStorage.removeItem("currentUser");
+        sessionStorage.clear();
       }
     }
     setIsLoading(false);
@@ -250,7 +272,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     setUser(null);
+    // Clear all auth-related data
     localStorage.removeItem("currentUser");
+    localStorage.removeItem("authToken");
+    // Clear any session storage as well
+    sessionStorage.clear();
     router.push("/sign-in");
   };
 

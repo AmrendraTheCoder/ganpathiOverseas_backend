@@ -3,7 +3,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "export": "next export",
+    "type-check": "tsc --noEmit",
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "db:setup": "node scripts/setup-db.js",
+    "db:migrate": "node scripts/migrate-db.js",
+    "deploy": "npm run build && npm run start"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.3",
@@ -52,7 +59,11 @@
     "typescript": "^5"
   },
   "name": "ganpathi-overseas-backend",
+  "version": "1.0.0",
   "main": "next.config.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "keywords": [
     "ganpathi-overseas",
     "backend",
@@ -61,7 +72,10 @@
     "nextjs",
     "supabase",
     "typescript",
-    "tailwindcss"
+    "tailwindcss",
+    "erp",
+    "printing",
+    "business"
   ],
   "author": "Amrendra Singh",
   "license": "MIT",

@@ -6,8 +6,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const searchParams = request.nextUrl.searchParams;
     const operatorId = searchParams.get("operatorId");
-    const date =
-      searchParams.get("date") || new Date().toISOString().split("T")[0];
+    const jobId = searchParams.get("jobId");
 
     if (!operatorId) {
       return NextResponse.json(
@@ -16,65 +15,62 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch time logs for the operator for the specified date
-    const { data: timeLogs, error } = await supabase
+    let query = supabase
       .from("time_logs")
-      .select(
-        `
-        *,
-        job_sheets (
-          id,
-          job_number,
-          title,
-          status
-        ),
-        machines (
-          id,
-          name,
-          machine_type
-        )
-      `
-      )
+      .select("*")
       .eq("operator_id", operatorId)
-      .gte("clock_in_time", `${date}T00:00:00`)
-      .lt("clock_in_time", `${date}T23:59:59`)
-      .order("clock_in_time", { ascending: false });
+      .order("started_at", { ascending: false });
+
+    // Filter by specific job if provided
+    if (jobId) {
+      query = query.eq("job_id", jobId);
+    }
+
+    const { data: timeLogs, error } = await query;
 
     if (error) {
       console.error("Error fetching time logs:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Get active time log (if any)
-    const { data: activeLog, error: activeError } = await supabase
-      .from("time_logs")
-      .select(
-        `
-        *,
-        job_sheets (
-          id,
-          job_number,
-          title
-        ),
-        machines (
-          id,
-          name,
-          machine_type
-        )
-      `
-      )
-      .eq("operator_id", operatorId)
-      .eq("status", "active")
-      .single();
+    // If we have time logs, fetch related job sheets and machines data
+    let enrichedTimeLogs = timeLogs || [];
 
-    if (activeError && activeError.code !== "PGRST116") {
-      console.error("Error fetching active time log:", activeError);
+    if (timeLogs && timeLogs.length > 0) {
+      // Get unique job IDs and machine IDs
+      const jobIds = [...new Set(timeLogs.map((log) => log.job_id))];
+      const machineIds = [
+        ...new Set(
+          timeLogs.map((log) => log.machine_id).filter((id) => id !== null)
+        ),
+      ];
+
+      // Fetch job sheets data
+      const { data: jobSheets } = await supabase
+        .from("job_sheets")
+        .select("id, job_number, title, status")
+        .in("id", jobIds);
+
+      // Fetch machines data if we have machine IDs
+      let machines = [];
+      if (machineIds.length > 0) {
+        const { data: machinesData } = await supabase
+          .from("machines")
+          .select("id, name, type, model")
+          .in("id", machineIds);
+        machines = machinesData || [];
+      }
+
+      // Enrich time logs with related data
+      enrichedTimeLogs = timeLogs.map((log) => ({
+        ...log,
+        job_sheets: jobSheets?.find((job) => job.id === log.job_id) || null,
+        machines:
+          machines.find((machine) => machine.id === log.machine_id) || null,
+      }));
     }
 
-    return NextResponse.json({
-      timeLogs,
-      activeLog: activeLog || null,
-    });
+    return NextResponse.json({ timeLogs: enrichedTimeLogs });
   } catch (error: any) {
     console.error("Unexpected error fetching time logs:", error);
     return NextResponse.json(
@@ -88,21 +84,52 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
     const body = await request.json();
-    const { action, operatorId, data } = body;
+    const {
+      action,
+      operatorId,
+      jobId,
+      machineId,
+      notes,
+      breakTimeMinutes,
+      productivityScore,
+    } = body;
+
+    if (!action || !operatorId || !jobId) {
+      return NextResponse.json(
+        { error: "Missing required fields: action, operatorId, jobId" },
+        { status: 400 }
+      );
+    }
 
     switch (action) {
       case "clock_in":
+        // Check if there's already an active time log for this operator
+        const { data: activeLog } = await supabase
+          .from("time_logs")
+          .select("id")
+          .eq("operator_id", operatorId)
+          .is("ended_at", null)
+          .single();
+
+        if (activeLog) {
+          return NextResponse.json(
+            {
+              error:
+                "You already have an active time log. Please clock out first.",
+            },
+            { status: 400 }
+          );
+        }
+
         // Create new time log entry
         const { data: newTimeLog, error: clockInError } = await supabase
           .from("time_logs")
           .insert({
-            job_sheet_id: data.jobId,
+            job_id: jobId,
             operator_id: operatorId,
-            machine_id: data.machineId,
-            clock_in_time: new Date().toISOString(),
-            task_description: data.taskDescription,
-            work_stage: data.workStage,
-            status: "active",
+            machine_id: machineId || null,
+            started_at: new Date().toISOString(),
+            notes: notes || "Started working on job",
           })
           .select()
           .single();
@@ -114,6 +141,15 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        // Update job status to in_progress
+        await supabase
+          .from("job_sheets")
+          .update({
+            status: "in_progress",
+            started_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+
         return NextResponse.json({
           success: true,
           message: "Clocked in successfully",
@@ -121,20 +157,32 @@ export async function POST(request: NextRequest) {
         });
 
       case "clock_out":
-        // Update current active time log
-        const { data: updatedTimeLog, error: clockOutError } = await supabase
+        // Find the active time log for this operator and job
+        const { data: activeTimeLog, error: findError } = await supabase
+          .from("time_logs")
+          .select("*")
+          .eq("operator_id", operatorId)
+          .eq("job_id", jobId)
+          .is("ended_at", null)
+          .single();
+
+        if (findError || !activeTimeLog) {
+          return NextResponse.json(
+            { error: "No active time log found for this job" },
+            { status: 400 }
+          );
+        }
+
+        // Update time log with clock out time
+        const { error: clockOutError } = await supabase
           .from("time_logs")
           .update({
-            clock_out_time: new Date().toISOString(),
-            status: "completed",
-            quantity_processed: data.quantityProcessed || 0,
-            notes: data.notes || "",
-            total_work_minutes: data.totalWorkMinutes,
+            ended_at: new Date().toISOString(),
+            break_time_minutes: breakTimeMinutes || 0,
+            notes: notes || activeTimeLog.notes,
+            productivity_score: productivityScore || null,
           })
-          .eq("id", data.timeLogId)
-          .eq("operator_id", operatorId)
-          .select()
-          .single();
+          .eq("id", activeTimeLog.id);
 
         if (clockOutError) {
           return NextResponse.json(
@@ -146,100 +194,53 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           message: "Clocked out successfully",
-          timeLog: updatedTimeLog,
         });
 
-      case "start_break":
-        // Update current time log with break start time
-        const { error: breakStartError } = await supabase
+      case "add_break":
+        // Add break time to active time log
+        const { data: currentLog, error: getCurrentError } = await supabase
+          .from("time_logs")
+          .select("*")
+          .eq("operator_id", operatorId)
+          .eq("job_id", jobId)
+          .is("ended_at", null)
+          .single();
+
+        if (getCurrentError || !currentLog) {
+          return NextResponse.json(
+            { error: "No active time log found" },
+            { status: 400 }
+          );
+        }
+
+        const { error: breakError } = await supabase
           .from("time_logs")
           .update({
-            break_start_time: new Date().toISOString(),
-            status: "break",
+            break_time_minutes:
+              (currentLog.break_time_minutes || 0) + (breakTimeMinutes || 15),
+            notes: notes
+              ? `${currentLog.notes}\nBreak: ${notes}`
+              : currentLog.notes,
           })
-          .eq("id", data.timeLogId)
-          .eq("operator_id", operatorId);
+          .eq("id", currentLog.id);
 
-        if (breakStartError) {
+        if (breakError) {
           return NextResponse.json(
-            { error: breakStartError.message },
+            { error: breakError.message },
             { status: 500 }
           );
         }
 
         return NextResponse.json({
           success: true,
-          message: "Break started",
-        });
-
-      case "end_break":
-        // Update current time log with break end time
-        const { error: breakEndError } = await supabase
-          .from("time_logs")
-          .update({
-            break_end_time: new Date().toISOString(),
-            status: "active",
-            total_break_minutes: data.totalBreakMinutes,
-          })
-          .eq("id", data.timeLogId)
-          .eq("operator_id", operatorId);
-
-        if (breakEndError) {
-          return NextResponse.json(
-            { error: breakEndError.message },
-            { status: 500 }
-          );
-        }
-
-        return NextResponse.json({
-          success: true,
-          message: "Break ended",
-        });
-
-      case "update_progress":
-        // Update progress in current time log
-        const { error: progressError } = await supabase
-          .from("time_logs")
-          .update({
-            quantity_processed: data.quantityProcessed,
-            notes: data.notes || "",
-          })
-          .eq("id", data.timeLogId)
-          .eq("operator_id", operatorId);
-
-        if (progressError) {
-          return NextResponse.json(
-            { error: progressError.message },
-            { status: 500 }
-          );
-        }
-
-        // Also update job progress table
-        const { error: jobProgressError } = await supabase
-          .from("job_progress")
-          .upsert({
-            job_sheet_id: data.jobId,
-            stage: data.workStage,
-            status: "in_progress",
-            progress_percentage: data.progressPercentage,
-            quantity_completed: data.quantityProcessed,
-            operator_id: operatorId,
-          });
-
-        if (jobProgressError) {
-          console.error("Error updating job progress:", jobProgressError);
-        }
-
-        return NextResponse.json({
-          success: true,
-          message: "Progress updated successfully",
+          message: "Break time added successfully",
         });
 
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
   } catch (error: any) {
-    console.error("Unexpected error in time log action:", error);
+    console.error("Error processing time log action:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -32,6 +32,7 @@ import {
   getPartyById,
   getJobSheetById,
 } from "@/data/demo-data";
+import { formatDate, formatCurrency } from "@/lib/utils";
 
 const FinanceDashboard = () => {
   const stats = getDashboardStats("finance");
@@ -139,7 +140,7 @@ const FinanceDashboard = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Revenue"
-          value={`₹${(stats.totalRevenue / 1000).toFixed(0)}K`}
+          value={formatCurrency(stats.totalRevenue)}
           icon={DollarSign}
           description="This month"
           trend="+12% from last month"
@@ -172,7 +173,7 @@ const FinanceDashboard = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <StatCard
           title="Monthly Expenses"
-          value={`₹${(stats.monthlyExpenses / 1000).toFixed(0)}K`}
+          value={formatCurrency(stats.monthlyExpenses)}
           icon={TrendingDown}
           description="This month"
           trend="+8% from last month"
@@ -180,7 +181,7 @@ const FinanceDashboard = () => {
         />
         <StatCard
           title="Monthly Revenue"
-          value={`₹${(stats.monthlyRevenue / 1000).toFixed(0)}K`}
+          value={formatCurrency(stats.monthlyRevenue)}
           icon={TrendingUp}
           description="This month"
           trend="+15% from last month"
@@ -188,7 +189,7 @@ const FinanceDashboard = () => {
         />
         <StatCard
           title="Net Profit"
-          value={`₹${((stats.totalRevenue - stats.monthlyExpenses) / 1000).toFixed(0)}K`}
+          value={formatCurrency(stats.totalRevenue - stats.monthlyExpenses)}
           icon={DollarSign}
           description="This month"
           trend="+22% from last month"
@@ -234,14 +235,12 @@ const FinanceDashboard = () => {
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Due:{" "}
-                        {invoice.dueDate
-                          ? new Date(invoice.dueDate).toLocaleDateString()
-                          : "TBD"}
+                        {invoice.dueDate ? formatDate(invoice.dueDate) : "TBD"}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium">
-                        ₹{invoice.amount.toLocaleString()}
+                        {formatCurrency(invoice.amount)}
                       </p>
                       <div className="flex items-center space-x-1">
                         <Button variant="ghost" size="sm">
@@ -289,17 +288,15 @@ const FinanceDashboard = () => {
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {party?.name} •{" "}
-                        {new Date(
-                          transaction.transactionDate
-                        ).toLocaleDateString()}
+                        {formatDate(transaction.transactionDate)}
                       </p>
                     </div>
                     <div className="text-right">
                       <p
                         className={`text-sm font-medium ${isCredit ? "text-green-600" : "text-blue-600"}`}
                       >
-                        {isCredit ? "+" : ""}₹
-                        {transaction.amount.toLocaleString()}
+                        {isCredit ? "+" : ""}
+                        {formatCurrency(transaction.amount)}
                       </p>
                       <Badge className={getStatusBadge(transaction.status)}>
                         {transaction.status}
@@ -340,8 +337,7 @@ const FinanceDashboard = () => {
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {expense.vendorName} •{" "}
-                    {new Date(expense.expenseDate).toLocaleDateString()}
+                    {expense.vendorName} • {formatDate(expense.expenseDate)}
                   </p>
                   {expense.invoiceNumber && (
                     <p className="text-xs text-muted-foreground">
@@ -351,7 +347,7 @@ const FinanceDashboard = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-medium text-red-600">
-                    ₹{expense.amount.toLocaleString()}
+                    {formatCurrency(expense.amount)}
                   </p>
                   <p className="text-xs text-muted-foreground capitalize">
                     {expense.paymentMethod}
@@ -395,20 +391,19 @@ const FinanceDashboard = () => {
                     <div className="flex justify-between text-sm">
                       <span>Current Balance:</span>
                       <span className="font-medium">
-                        ₹{party.currentBalance.toLocaleString()}
+                        {formatCurrency(party.currentBalance)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Credit Limit:</span>
-                      <span>₹{party.creditLimit.toLocaleString()}</span>
+                      <span>{formatCurrency(party.creditLimit)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Available Credit:</span>
                       <span className="font-medium text-green-600">
-                        ₹
-                        {(
+                        {formatCurrency(
                           party.creditLimit - party.currentBalance
-                        ).toLocaleString()}
+                        )}
                       </span>
                     </div>
                   </div>
