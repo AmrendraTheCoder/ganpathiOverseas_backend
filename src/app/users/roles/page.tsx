@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   Card,
   CardContent,
@@ -334,10 +334,10 @@ function UserRolesPageContent() {
 
   // Format dates consistently to avoid hydration errors
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     });
   };
 
@@ -778,45 +778,47 @@ function UserRolesPageContent() {
                   </thead>
                   <tbody>
                     {Object.entries(getPermissionsByCategory()).map(
-                      ([category, perms]) => [
-                        <tr key={`${category}-header`} className="bg-gray-50">
-                          <td
-                            colSpan={roles.length + 1}
-                            className="p-3 font-medium"
-                          >
-                            {category}
-                          </td>
-                        </tr>,
-                        ...perms.map((permission) => (
-                          <tr
-                            key={permission.id}
-                            className="border-b hover:bg-gray-50"
-                          >
-                            <td className="p-3">
-                              <div>
-                                <div className="font-medium">
-                                  {permission.name}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {permission.description}
-                                </div>
-                              </div>
+                      ([category, perms]) => (
+                        <React.Fragment key={category}>
+                          <tr className="bg-gray-50">
+                            <td
+                              colSpan={roles.length + 1}
+                              className="p-3 font-medium"
+                            >
+                              {category}
                             </td>
-                            {roles.map((role) => (
-                              <td key={role.id} className="text-center p-3">
-                                {hasPermission(
-                                  role.permissions,
-                                  permission.id
-                                ) ? (
-                                  <CheckCircle className="w-5 h-5 text-green-600 mx-auto" />
-                                ) : (
-                                  <XCircle className="w-5 h-5 text-gray-300 mx-auto" />
-                                )}
-                              </td>
-                            ))}
                           </tr>
-                        ))
-                      ]).flat()
+                          {perms.map((permission) => (
+                            <tr
+                              key={permission.id}
+                              className="border-b hover:bg-gray-50"
+                            >
+                              <td className="p-3">
+                                <div>
+                                  <div className="font-medium">
+                                    {permission.name}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {permission.description}
+                                  </div>
+                                </div>
+                              </td>
+                              {roles.map((role) => (
+                                <td key={role.id} className="text-center p-3">
+                                  {hasPermission(
+                                    role.permissions,
+                                    permission.id
+                                  ) ? (
+                                    <CheckCircle className="w-5 h-5 text-green-600 mx-auto" />
+                                  ) : (
+                                    <XCircle className="w-5 h-5 text-gray-300 mx-auto" />
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      )
                     )}
                   </tbody>
                 </table>

@@ -158,18 +158,21 @@ export default function SignInPage() {
               <p>Demo Accounts:</p>
               <div className="mt-2 space-y-1 text-xs">
                 <p>
-                  <strong>Admin:</strong> admin@ganpathioverseas.com
+                  <strong>Admin:</strong> admin@ganpathioverseas.com or admin
                 </p>
                 <p>
                   <strong>Supervisor:</strong> supervisor@ganpathioverseas.com
+                  or supervisor
                 </p>
                 <p>
-                  <strong>Finance:</strong> finance@ganpathioverseas.com
+                  <strong>Finance:</strong> finance@ganpathioverseas.com or
+                  finance
                 </p>
                 <p>
-                  <strong>Operator:</strong> operator@ganpathioverseas.com
+                  <strong>Operator:</strong> operator1@ganpathioverseas.com or
+                  operator1
                 </p>
-                <p className="text-gray-500">Password: password123</p>
+                <p className="text-gray-500">Password: password</p>
               </div>
             </div>
           </CardContent>

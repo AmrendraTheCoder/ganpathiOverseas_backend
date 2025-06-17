@@ -6,13 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, AlertTriangle } from "lucide-react";
 
 interface RoleBasedAccessProps {
-  allowedRoles: string[];
+  allowedRoles?: string[];
   children: ReactNode;
   fallback?: ReactNode;
 }
 
 export function RoleBasedAccess({
-  allowedRoles,
+  allowedRoles = [],
   children,
   fallback,
 }: RoleBasedAccessProps) {
@@ -40,7 +40,7 @@ export function RoleBasedAccess({
   }
 
   // Check if user role is in allowed roles
-  if (!allowedRoles.includes(user.role)) {
+  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
     return (
       fallback || (
         <div className="container mx-auto p-6">

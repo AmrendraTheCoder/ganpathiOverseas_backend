@@ -65,23 +65,23 @@ A comprehensive print shop management system built with Next.js 14, TypeScript, 
 
 1. **Clone the repository**
 
-   ```bash
+```bash
    git clone [repository-url]
    cd ganpathiOverseas_backend
-   ```
+```
 
 2. **Install dependencies**
 
-   ```bash
-   npm install
+```bash
+npm install
    # or
    yarn install
-   ```
+```
 
 3. **Set up environment variables**
    Create a `.env.local` file in the root directory:
 
-   ```env
+```env
    # API Configuration
    NEXT_PUBLIC_API_URL=http://localhost:3001/api
 
@@ -100,8 +100,8 @@ A comprehensive print shop management system built with Next.js 14, TypeScript, 
 
 4. **Run the development server**
 
-   ```bash
-   npm run dev
+```bash
+npm run dev
    # or
    yarn dev
    ```

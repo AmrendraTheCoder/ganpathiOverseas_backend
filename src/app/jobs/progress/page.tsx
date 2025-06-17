@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -8,9 +9,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -18,396 +20,431 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import {
-  Search,
-  Filter,
-  Calendar,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  Play,
-  Pause,
-  Eye,
-  FileText,
-  User,
-  Building2,
-} from "lucide-react";
-import { useState } from "react";
-import {
-  demoJobSheets,
-  demoJobProgress,
-  getUserById,
-  getPartyById,
-  getMachineById,
-  type JobProgress,
-} from "@/data/demo-data";
-import DashboardPageLayout from "@/components/layout/DashboardPageLayout";
-import { RoleBasedAccess } from "@/components/auth/RoleBasedAccess";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Clock, Factory, CheckCircle, AlertCircle, Play } from "lucide-react";
+import DashboardLayout from "@/app/dashboard/layout";
 
-function JobProgressPageContent() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
+interface Job {
+  id: number;
+  title: string;
+  job_number: string;
+  quantity: number;
+  due_date: string;
+  status: string;
+  priority: number;
+  colors: string;
+  paper_type: string;
+  paper_size: string;
+  parties: {
+    name: string;
+    phone: string;
+    email: string;
+  };
+  machines: {
+    id: number;
+    name: string;
+    type: string;
+    model: string;
+  } | null;
+}
 
-  const jobProgressMap = new Map<string, JobProgress[]>();
-  demoJobProgress.forEach((progress) => {
-    if (!jobProgressMap.has(progress.jobId)) {
-      jobProgressMap.set(progress.jobId, []);
+interface ProgressUpdate {
+  jobId: number;
+  stage: string;
+  percentage: number;
+  qualityRating: number;
+  notes: string;
+}
+
+export default function JobProgress() {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+
+  // Progress form state
+  const [progressData, setProgressData] = useState<ProgressUpdate>({
+    jobId: 0,
+    stage: "",
+    percentage: 0,
+    qualityRating: 5,
+    notes: "",
+  });
+
+  // Mock operator ID - in a real app this would come from auth
+  const operatorId = "44444444-4444-4444-4444-444444444444";
+
+  const stages = [
+    "setup",
+    "printing",
+    "cutting",
+    "finishing",
+    "quality_check",
+    "packaging",
+    "completed",
+  ];
+
+  useEffect(() => {
+    fetchJobs();
+  }, []);
+
+  const fetchJobs = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `/api/operator/jobs?operatorId=${operatorId}`
+      );
+      const data = await response.json();
+
+      if (response.ok) {
+        setJobs(data.jobs || []);
+        setError(null);
+      } else {
+        setError(data.error || "Failed to fetch jobs");
+      }
+    } catch (err) {
+      setError("Network error occurred");
+    } finally {
+      setLoading(false);
     }
-    jobProgressMap.get(progress.jobId)!.push(progress);
-  });
-
-  const getJobProgress = (jobId: string) => {
-    const progressSteps = jobProgressMap.get(jobId) || [];
-    const stages = ["design", "prepress", "printing", "finishing"];
-    const completedSteps = progressSteps.filter(
-      (p) => p.status === "completed"
-    ).length;
-    const totalSteps = stages.length;
-    return (completedSteps / totalSteps) * 100;
   };
 
-  const getCurrentStage = (jobId: string) => {
-    const progressSteps = jobProgressMap.get(jobId) || [];
-    const inProgressStep = progressSteps.find(
-      (p) => p.status === "in_progress"
-    );
-    const lastCompletedStep = progressSteps
-      .filter((p) => p.status === "completed")
-      .sort(
-        (a, b) =>
-          new Date(b.completedAt || b.startedAt).getTime() -
-          new Date(a.completedAt || a.startedAt).getTime()
-      )[0];
-
-    return inProgressStep?.stage || lastCompletedStep?.stage || "pending";
+  const selectJob = (job: Job) => {
+    setSelectedJob(job);
+    setProgressData({
+      jobId: job.id,
+      stage: job.status === "in_progress" ? "printing" : "setup",
+      percentage:
+        job.status === "completed"
+          ? 100
+          : job.status === "in_progress"
+            ? 50
+            : 0,
+      qualityRating: 5,
+      notes: "",
+    });
+    setShowUpdateModal(true);
   };
 
-  const getStageIcon = (stage: string) => {
-    const icons = {
-      design: FileText,
-      prepress: Clock,
-      printing: Play,
-      finishing: CheckCircle,
-      completed: CheckCircle,
-      pending: AlertTriangle,
-    };
-    return icons[stage as keyof typeof icons] || AlertTriangle;
+  const updateProgress = async () => {
+    if (!selectedJob) return;
+
+    try {
+      setUpdating(true);
+
+      // If progress is 100%, complete the job
+      if (progressData.percentage === 100) {
+        const response = await fetch("/api/operator/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobId: selectedJob.id,
+            operatorId,
+            action: "complete_job",
+          }),
+        });
+
+        if (response.ok) {
+          await fetchJobs();
+          setSelectedJob(null);
+          setShowUpdateModal(false);
+        }
+      } else {
+        // Start job if it's pending
+        if (selectedJob.status === "pending") {
+          await fetch("/api/operator/jobs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jobId: selectedJob.id,
+              operatorId,
+              action: "start_job",
+            }),
+          });
+        }
+
+        // In a real app, you'd have a separate API for progress updates
+        // For now, we'll just refresh the jobs
+        await fetchJobs();
+        setShowUpdateModal(false);
+      }
+    } catch (err) {
+      console.error("Failed to update progress:", err);
+    } finally {
+      setUpdating(false);
+    }
   };
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      pending: "bg-yellow-100 text-yellow-800",
-      in_progress: "bg-blue-100 text-blue-800",
-      completed: "bg-green-100 text-green-800",
-      cancelled: "bg-red-100 text-red-800",
-    };
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "in_progress":
+        return "bg-blue-500";
+      case "pending":
+        return "bg-yellow-500";
+      case "completed":
+        return "bg-green-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  if (loading) {
     return (
-      variants[status as keyof typeof variants] || "bg-gray-100 text-gray-800"
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-lg">Loading jobs...</div>
+        </div>
+      </DashboardLayout>
     );
-  };
-
-  const getPriorityBadge = (priority: number) => {
-    const labels = {
-      1: { label: "Low", color: "bg-gray-100 text-gray-800" },
-      2: { label: "Normal", color: "bg-blue-100 text-blue-800" },
-      3: { label: "High", color: "bg-orange-100 text-orange-800" },
-      4: { label: "Urgent", color: "bg-red-100 text-red-800" },
-      5: { label: "Critical", color: "bg-red-200 text-red-900" },
-    };
-    return labels[priority as keyof typeof labels] || labels[2];
-  };
-
-  const filteredJobs = demoJobSheets.filter((job) => {
-    const matchesSearch =
-      job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.jobNumber.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || job.status === statusFilter;
-    const matchesPriority =
-      priorityFilter === "all" || job.priority.toString() === priorityFilter;
-
-    return matchesSearch && matchesStatus && matchesPriority;
-  });
+  }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Job Progress Tracking
-          </h1>
-          <p className="text-gray-600">
-            Monitor the progress of all print jobs
-          </p>
-        </div>
-        <Button>
-          <Calendar className="w-4 h-4 mr-2" />
-          Schedule View
-        </Button>
+    <DashboardLayout>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          Job Progress Tracking
+        </h1>
+        <p className="text-gray-600">
+          Update progress and manage job completion
+        </p>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Filter className="w-5 h-5 mr-2" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">
-                Search Jobs
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search by job title or number..."
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-2 block">Status</label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-2 block">Priority</label>
-              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Priorities" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priorities</SelectItem>
-                  <SelectItem value="1">Low</SelectItem>
-                  <SelectItem value="2">Normal</SelectItem>
-                  <SelectItem value="3">High</SelectItem>
-                  <SelectItem value="4">Urgent</SelectItem>
-                  <SelectItem value="5">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button variant="outline" className="w-full">
-                Reset Filters
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-600">Error: {error}</p>
+          <Button onClick={fetchJobs} className="mt-2" size="sm">
+            Retry
+          </Button>
+        </div>
+      )}
 
-      {/* Progress Overview */}
       <div className="grid gap-6">
-        {filteredJobs.map((job) => {
-          const progress = getJobProgress(job.id);
-          const currentStage = getCurrentStage(job.id);
-          const priority = getPriorityBadge(job.priority);
-          const party = getPartyById(job.partyId);
-          const assignedUser = getUserById(job.assignedTo || "");
-          const StageIcon = getStageIcon(currentStage);
-          const progressSteps = jobProgressMap.get(job.id) || [];
-
-          return (
-            <Card key={job.id}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <CardTitle className="flex items-center space-x-2">
-                        <span>{job.title}</span>
-                        <Badge className={getStatusBadge(job.status)}>
-                          {job.status.replace("_", " ")}
-                        </Badge>
-                        <Badge className={priority.color}>
-                          {priority.label}
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription className="flex items-center space-x-4 mt-1">
-                        <span className="flex items-center">
-                          <FileText className="w-4 h-4 mr-1" />
-                          {job.jobNumber}
-                        </span>
-                        <span className="flex items-center">
-                          <Building2 className="w-4 h-4 mr-1" />
-                          {party?.name}
-                        </span>
-                        <span className="flex items-center">
-                          <User className="w-4 h-4 mr-1" />
-                          {assignedUser?.name || "Unassigned"}
-                        </span>
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="text-right">
-                      <div className="text-sm font-medium">Progress</div>
-                      <div className="text-lg font-bold">
-                        {progress.toFixed(0)}%
-                      </div>
-                    </div>
-                    <StageIcon className="w-6 h-6 text-blue-600" />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Overall Progress Bar */}
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Overall Progress</span>
-                      <span>{progress.toFixed(0)}% Complete</span>
-                    </div>
-                    <Progress value={progress} className="h-2" />
-                  </div>
-
-                  {/* Stage Progress */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    {["design", "prepress", "printing", "finishing"].map(
-                      (stage, index) => {
-                        const stageProgress = progressSteps.find(
-                          (p) => p.stage === stage
-                        );
-                        const isCompleted =
-                          stageProgress?.status === "completed";
-                        const isInProgress =
-                          stageProgress?.status === "in_progress";
-                        const isNext =
-                          !isCompleted && !isInProgress && index === 0; // First incomplete stage
-
-                        return (
-                          <div key={stage} className="text-center">
-                            <div
-                              className={`w-12 h-12 mx-auto rounded-full border-2 flex items-center justify-center mb-2 ${
-                                isCompleted
-                                  ? "bg-green-100 border-green-500 text-green-700"
-                                  : isInProgress
-                                    ? "bg-blue-100 border-blue-500 text-blue-700"
-                                    : isNext
-                                      ? "bg-yellow-100 border-yellow-500 text-yellow-700"
-                                      : "bg-gray-100 border-gray-300 text-gray-500"
-                              }`}
-                            >
-                              {isCompleted ? (
-                                <CheckCircle className="w-6 h-6" />
-                              ) : isInProgress ? (
-                                <Play className="w-6 h-6" />
-                              ) : (
-                                <Clock className="w-6 h-6" />
-                              )}
-                            </div>
-                            <div className="text-xs font-medium capitalize">
-                              {stage}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {isCompleted
-                                ? "Completed"
-                                : isInProgress
-                                  ? "In Progress"
-                                  : isNext
-                                    ? "Next"
-                                    : "Pending"}
-                            </div>
-                          </div>
-                        );
-                      }
-                    )}
-                  </div>
-
-                  {/* Timeline */}
-                  {progressSteps.length > 0 && (
-                    <div className="border-t pt-4">
-                      <h4 className="text-sm font-medium mb-3">
-                        Recent Activity
-                      </h4>
-                      <div className="space-y-2">
-                        {progressSteps
-                          .sort(
-                            (a, b) =>
-                              new Date(b.startedAt).getTime() -
-                              new Date(a.startedAt).getTime()
-                          )
-                          .slice(0, 3)
-                          .map((step, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center text-sm text-gray-600"
-                            >
-                              <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                              <span className="capitalize">{step.stage}</span>
-                              <span className="mx-2">•</span>
-                              <span className="capitalize">{step.status}</span>
-                              <span className="mx-2">•</span>
-                              <span>
-                                {new Date(step.startedAt).toLocaleDateString()}
-                              </span>
-                              {step.notes && (
-                                <>
-                                  <span className="mx-2">•</span>
-                                  <span className="text-gray-500">
-                                    {step.notes}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-end space-x-2 pt-2 border-t">
-                    <Button variant="outline" size="sm">
-                      <Eye className="w-4 h-4 mr-2" />
-                      View Details
-                    </Button>
-                    {job.status === "in_progress" && (
-                      <Button size="sm">Update Progress</Button>
-                    )}
-                  </div>
+        {/* Jobs List */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Active Jobs</h2>
+          {jobs.length === 0 ? (
+            <Card>
+              <CardContent className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <AlertCircle className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500">No jobs assigned to you</p>
                 </div>
               </CardContent>
             </Card>
-          );
-        })}
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {jobs.map((job) => (
+                <Card
+                  key={job.id}
+                  className="cursor-pointer hover:shadow-md transition-shadow"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <CardTitle className="text-base">{job.title}</CardTitle>
+                        <CardDescription className="text-sm">
+                          Job #{job.job_number}
+                        </CardDescription>
+                      </div>
+                      <Badge
+                        className={`${getStatusColor(job.status)} text-white`}
+                      >
+                        {job.status.replace("_", " ")}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-gray-500">Quantity:</span>
+                        <p className="font-medium">
+                          {job.quantity.toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Due Date:</span>
+                        <p className="font-medium">
+                          {new Date(job.due_date).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-sm">
+                        <span className="text-gray-500">Client:</span>
+                        <p className="font-medium">{job.parties.name}</p>
+                      </div>
+
+                      {job.machines && (
+                        <div className="text-sm">
+                          <span className="text-gray-500">Machine:</span>
+                          <p className="font-medium flex items-center">
+                            <Factory className="h-4 w-4 mr-1" />
+                            {job.machines.name}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-sm">
+                        <span className="text-gray-500">Specifications:</span>
+                        <p className="text-xs">
+                          {job.colors} • {job.paper_type} • {job.paper_size}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2">
+                      <Button
+                        onClick={() => selectJob(job)}
+                        className="w-full"
+                        variant={
+                          job.status === "pending" ? "default" : "outline"
+                        }
+                      >
+                        {job.status === "pending" && (
+                          <Play className="h-4 w-4 mr-2" />
+                        )}
+                        {job.status === "completed" && (
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                        )}
+                        {job.status === "in_progress" && (
+                          <Clock className="h-4 w-4 mr-2" />
+                        )}
+
+                        {job.status === "pending"
+                          ? "Start Job"
+                          : job.status === "completed"
+                            ? "View Details"
+                            : "Update Progress"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {filteredJobs.length === 0 && (
-        <Card>
-          <CardContent className="text-center py-8">
-            <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No jobs found
-            </h3>
-            <p className="text-gray-600">
-              Try adjusting your filters or search terms.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
+      {/* Progress Update Modal */}
+      <Dialog open={showUpdateModal} onOpenChange={setShowUpdateModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Job Progress</DialogTitle>
+            <DialogDescription>
+              {selectedJob &&
+                `Update progress for ${selectedJob.title} (Job #${selectedJob.job_number})`}
+            </DialogDescription>
+          </DialogHeader>
 
-export default function JobProgressPage() {
-  return (
-    <DashboardPageLayout>
-      <RoleBasedAccess allowedRoles={["admin", "supervisor", "operator"]}>
-        <JobProgressPageContent />
-      </RoleBasedAccess>
-    </DashboardPageLayout>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="stage">Current Stage</Label>
+              <Select
+                value={progressData.stage}
+                onValueChange={(value) =>
+                  setProgressData({ ...progressData, stage: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stages.map((stage) => (
+                    <SelectItem key={stage} value={stage}>
+                      {stage.replace("_", " ").toUpperCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="percentage">Progress Percentage</Label>
+              <div className="space-y-2">
+                <Input
+                  id="percentage"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={progressData.percentage}
+                  onChange={(e) =>
+                    setProgressData({
+                      ...progressData,
+                      percentage: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="Enter percentage (0-100)"
+                />
+                <Progress value={progressData.percentage} className="h-2" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quality">Quality Rating (1-10)</Label>
+              <Input
+                id="quality"
+                type="number"
+                min="1"
+                max="10"
+                value={progressData.qualityRating}
+                onChange={(e) =>
+                  setProgressData({
+                    ...progressData,
+                    qualityRating: parseInt(e.target.value) || 5,
+                  })
+                }
+                placeholder="Quality rating"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Progress Notes</Label>
+              <Textarea
+                id="notes"
+                value={progressData.notes}
+                onChange={(e) =>
+                  setProgressData({ ...progressData, notes: e.target.value })
+                }
+                placeholder="Add any notes about the progress..."
+                rows={3}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                onClick={updateProgress}
+                disabled={updating}
+                className="flex-1"
+              >
+                {updating
+                  ? "Updating..."
+                  : progressData.percentage === 100
+                    ? "Complete Job"
+                    : "Update Progress"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowUpdateModal(false)}
+                disabled={updating}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
   );
-}
+} 

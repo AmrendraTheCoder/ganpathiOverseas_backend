@@ -86,7 +86,7 @@ function UsersPageContent() {
   );
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="w-full min-h-screen p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">User Management</h1>

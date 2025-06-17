@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '../../../../supabase/server';
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "../../../../supabase/server";
 
 export async function GET() {
   try {
@@ -7,9 +7,9 @@ export async function GET() {
 
     // Check if party_transactions table exists and has correct schema
     const { data: tables, error: tablesError } = await supabase
-      .from('information_schema.tables')
-      .select('table_name')
-      .eq('table_name', 'party_transactions');
+      .from("information_schema.tables")
+      .select("table_name")
+      .eq("table_name", "party_transactions");
 
     let tableExists = false;
     let hasCorrectSchema = false;
@@ -19,10 +19,10 @@ export async function GET() {
 
       // Check if the table has the 'type' column
       const { data: columns, error: columnsError } = await supabase
-        .from('information_schema.columns')
-        .select('column_name')
-        .eq('table_name', 'party_transactions')
-        .eq('column_name', 'type');
+        .from("information_schema.columns")
+        .select("column_name")
+        .eq("table_name", "party_transactions")
+        .eq("column_name", "type");
 
       if (!columnsError && columns && columns.length > 0) {
         hasCorrectSchema = true;
@@ -32,13 +32,14 @@ export async function GET() {
     return NextResponse.json({
       tableExists,
       hasCorrectSchema,
-      message: tableExists 
-        ? (hasCorrectSchema ? 'Table exists with correct schema' : 'Table exists but missing columns')
-        : 'Table does not exist'
+      message: tableExists
+        ? hasCorrectSchema
+          ? "Table exists with correct schema"
+          : "Table exists but missing columns"
+        : "Table does not exist",
     });
-
   } catch (error: any) {
-    console.error('Database check error:', error);
+    console.error("Database check error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -89,17 +90,18 @@ export async function POST() {
     `;
 
     // Execute migration
-    const { error } = await supabase.rpc('exec_sql', { sql: migrationSQL });
+    const { error } = await supabase.rpc("exec_sql", { sql: migrationSQL });
 
     if (error) {
-      console.error('Migration error:', error);
+      console.error("Migration error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-
-    return NextResponse.json({ success: true, message: 'Migration completed successfully' });
-
+    return NextResponse.json({
+      success: true,
+      message: "Migration completed successfully",
+    });
   } catch (error: any) {
-    console.error('Migration execution error:', error);
+    console.error("Migration execution error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-} 
+}

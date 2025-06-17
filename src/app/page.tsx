@@ -48,7 +48,7 @@ export default function HomePage() {
     try {
       await login(credentials.username, credentials.password);
       // User will be redirected by the useEffect above
-    } catch (error) {
+      } catch (error) {
       console.error("Login failed:", error);
       setError(error instanceof Error ? error.message : "Login failed");
     } finally {
@@ -95,7 +95,7 @@ export default function HomePage() {
     return null;
   }
 
-  return (
+    return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
@@ -110,7 +110,7 @@ export default function HomePage() {
           <p className="text-gray-500 mt-2">
             Complete business management solution for print operations
           </p>
-        </div>
+          </div>
 
         <div className="grid gap-8 lg:grid-cols-2 max-w-6xl mx-auto">
           {/* Login Form */}
@@ -162,7 +162,7 @@ export default function HomePage() {
                 {error && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                     <p className="text-red-700 text-sm">{error}</p>
-                  </div>
+                </div>
                 )}
 
                 <Button type="submit" className="w-full" disabled={isLoading}>
@@ -179,12 +179,12 @@ export default function HomePage() {
                 <div className="space-y-2">
                   {demoCredentials.map((cred, index) => (
                     <div
-                      key={index}
+                key={index}
                       className="flex items-center justify-between text-sm"
                     >
                       <span className="font-medium text-blue-800">
                         {cred.role}:
-                      </span>
+                        </span>
                       <span className="text-blue-700">
                         {cred.username} / {cred.password}
                       </span>
@@ -202,11 +202,11 @@ export default function HomePage() {
                         Use
                       </Button>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
+                    </div>
+              </CardContent>
+            </Card>
 
           {/* Features Overview */}
           <Card className="shadow-lg">
@@ -222,18 +222,18 @@ export default function HomePage() {
                   <div key={index} className="flex items-start space-x-3">
                     <div className="p-2 bg-blue-100 rounded-lg">
                       <feature.icon className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
+                        </div>
+                        <div>
                       <h3 className="font-medium text-gray-900">
                         {feature.title}
                       </h3>
                       <p className="text-sm text-gray-600 mt-1">
                         {feature.description}
                       </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
 
               <div className="mt-8 p-4 bg-green-50 rounded-lg">
                 <h3 className="font-medium text-green-900 mb-3 flex items-center">
@@ -244,32 +244,32 @@ export default function HomePage() {
                   <div className="flex items-center justify-between">
                     <span className="text-green-800">
                       Frontend Development:
-                    </span>
+                </span>
                     <span className="text-green-700 font-medium">
                       ✅ Complete
                     </span>
-                  </div>
+                      </div>
                   <div className="flex items-center justify-between">
                     <span className="text-green-800">Demo Data System:</span>
                     <span className="text-green-700 font-medium">
                       ✅ Active
                     </span>
-                  </div>
+                    </div>
                   <div className="flex items-center justify-between">
                     <span className="text-green-800">API Integration:</span>
                     <span className="text-green-700 font-medium">✅ Ready</span>
-                  </div>
+                </div>
                   <div className="flex items-center justify-between">
                     <span className="text-green-800">Database Connection:</span>
                     <span className="text-amber-600 font-medium">
                       ⏳ Pending
                     </span>
-                  </div>
-                </div>
-              </div>
+                        </div>
+                          </div>
+                          </div>
             </CardContent>
           </Card>
-        </div>
+                        </div>
 
         {/* Additional Info */}
         <div className="mt-12 text-center">
@@ -282,37 +282,37 @@ export default function HomePage() {
                 <div className="text-center">
                   <div className="p-3 bg-red-100 rounded-lg inline-block mb-3">
                     <Shield className="w-6 h-6 text-red-600" />
-                  </div>
+                      </div>
                   <h3 className="font-medium text-gray-900">Admin</h3>
                   <p className="text-sm text-gray-600">
                     Complete system access and user management
                   </p>
-                </div>
+                        </div>
 
                 <div className="text-center">
                   <div className="p-3 bg-blue-100 rounded-lg inline-block mb-3">
                     <Users className="w-6 h-6 text-blue-600" />
-                  </div>
+                        </div>
                   <h3 className="font-medium text-gray-900">Supervisor</h3>
                   <p className="text-sm text-gray-600">
                     Production management and job oversight
                   </p>
-                </div>
+                      </div>
 
                 <div className="text-center">
                   <div className="p-3 bg-green-100 rounded-lg inline-block mb-3">
                     <BarChart3 className="w-6 h-6 text-green-600" />
-                  </div>
+                    </div>
                   <h3 className="font-medium text-gray-900">Finance</h3>
                   <p className="text-sm text-gray-600">
                     Financial operations and reporting
                   </p>
-                </div>
+        </div>
 
                 <div className="text-center">
                   <div className="p-3 bg-purple-100 rounded-lg inline-block mb-3">
                     <Settings className="w-6 h-6 text-purple-600" />
-                  </div>
+            </div>
                   <h3 className="font-medium text-gray-900">Operator</h3>
                   <p className="text-sm text-gray-600">
                     Task management and machine monitoring

@@ -22,6 +22,11 @@ import {
   Building2,
   CreditCard,
   Receipt,
+  Shield,
+  UserCheck,
+  Factory,
+  Target,
+  PieChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,259 +40,534 @@ interface NavItem {
   href?: string;
   icon: React.ComponentType<{ className?: string }>;
   items?: NavItem[];
-  roles?: string[];
+  badge?: string;
+  description?: string;
 }
 
-const navigationItems: NavItem[] = [
-  {
-    title: "Dashboard",
-    icon: LayoutDashboard,
-    items: [
-      {
-        title: "Admin Overview",
-        href: "/dashboard/admin",
-        icon: LayoutDashboard,
-        roles: ["admin"],
-      },
-      {
-        title: "Supervisor View",
-        href: "/dashboard/supervisor",
-        icon: LayoutDashboard,
-        roles: ["admin", "supervisor"],
-      },
-      {
-        title: "Finance View",
-        href: "/dashboard/finance",
-        icon: LayoutDashboard,
-        roles: ["admin", "finance"],
-      },
-      {
-        title: "Operator View",
-        href: "/dashboard/operator",
-        icon: LayoutDashboard,
-        roles: ["admin", "operator"],
-      },
-    ],
-  },
-  {
-    title: "Job Management",
-    icon: FileText,
-    items: [
-      {
-        title: "All Jobs",
-        href: "/jobs",
-        icon: FileText,
-        roles: ["admin", "supervisor", "operator"],
-      },
-      {
-        title: "Create Job",
-        href: "/jobs/create",
-        icon: ClipboardList,
-        roles: ["admin", "supervisor"],
-      },
-      {
-        title: "Job Progress",
-        href: "/jobs/progress",
-        icon: TrendingUp,
-        roles: ["admin", "supervisor", "operator"],
-      },
-      {
-        title: "Job Reports",
-        href: "/jobs/reports",
-        icon: BarChart3,
-        roles: ["admin", "supervisor"],
-      },
-    ],
-  },
-  {
-    title: "Production Management",
-    icon: Printer,
-    items: [
-      {
-        title: "Machines",
-        href: "/machines",
-        icon: Printer,
-        roles: ["admin", "supervisor", "operator"],
-      },
-      {
-        title: "Production Schedule",
-        href: "/production/schedule",
-        icon: ClipboardList,
-        roles: ["admin", "supervisor"],
-      },
-      {
-        title: "Quality Control",
-        href: "/production/quality",
-        icon: Package,
-        roles: ["admin", "supervisor", "operator"],
-      },
-    ],
-  },
-  {
-    title: "Customer Management",
-    icon: Building,
-    items: [
-      {
-        title: "All Parties",
-        href: "/parties",
-        icon: Building,
-        roles: ["admin", "supervisor", "finance"],
-      },
-      {
-        title: "Add Party",
-        href: "/parties/create",
-        icon: Building,
-        roles: ["admin", "supervisor"],
-      },
-      {
-        title: "CRM System",
-        href: "/crm",
-        icon: Users,
-        roles: ["admin", "supervisor", "finance"],
-      },
-      {
-        title: "Party Reports",
-        href: "/parties/reports",
-        icon: BarChart3,
-        roles: ["admin", "finance"],
-      },
-    ],
-  },
-  {
-    title: "Financial Management",
-    icon: DollarSign,
-    items: [
-      {
-        title: "Transactions",
-        href: "/finance/transactions",
-        icon: CreditCard,
-        roles: ["admin", "finance"],
-      },
-      {
-        title: "Invoices",
-        href: "/finance/invoices",
-        icon: FileText,
-        roles: ["admin", "finance"],
-      },
-      {
-        title: "Expenses",
-        href: "/expenses",
-        icon: Receipt,
-        roles: ["admin", "finance"],
-      },
-      {
-        title: "Financial Reports",
-        href: "/finance/reports",
-        icon: BarChart3,
-        roles: ["admin", "finance"],
-      },
-    ],
-  },
-  {
-    title: "Inventory",
-    icon: Package,
-    items: [
-      {
-        title: "All Items",
-        href: "/inventory",
-        icon: Package,
-        roles: ["admin", "supervisor", "finance"],
-      },
-      {
-        title: "Stock Movements",
-        href: "/inventory/movements",
-        icon: TrendingUp,
-        roles: ["admin", "supervisor", "finance"],
-      },
-      {
-        title: "Suppliers",
-        href: "/inventory/suppliers",
-        icon: Building2,
-        roles: ["admin", "finance"],
-      },
-      {
-        title: "Purchase Orders",
-        href: "/inventory/orders",
-        icon: FileText,
-        roles: ["admin", "finance"],
-      },
-    ],
-  },
-  {
-    title: "User Management",
-    icon: Users,
-    items: [
-      { title: "All Users", href: "/users", icon: Users, roles: ["admin"] },
-      {
-        title: "Add User",
-        href: "/users/create",
-        icon: Users,
-        roles: ["admin"],
-      },
-      {
-        title: "Roles & Permissions",
-        href: "/users/roles",
-        icon: Settings,
-        roles: ["admin"],
-      },
-    ],
-  },
-  {
-    title: "Reports & Analytics",
-    icon: BarChart3,
-    items: [
-      {
-        title: "Business Reports",
-        href: "/reports",
-        icon: BarChart3,
-        roles: ["admin", "supervisor", "finance"],
-      },
-      {
-        title: "Performance Analytics",
-        href: "/analytics",
-        icon: TrendingUp,
-        roles: ["admin", "supervisor"],
-      },
-    ],
-  },
-  {
-    title: "Settings",
-    icon: Settings,
-    items: [
-      {
-        title: "General Settings",
-        href: "/settings",
-        icon: Settings,
-        roles: ["admin"],
-      },
-      {
-        title: "System Configuration",
-        href: "/settings/system",
-        icon: Settings,
-        roles: ["admin"],
-      },
-    ],
-  },
-];
+// Role-specific navigation configurations
+const getRoleBasedNavigation = (userRole: string): NavItem[] => {
+  switch (userRole) {
+    case "admin":
+      return [
+        {
+          title: "Dashboard",
+          href: "/dashboard/admin",
+          icon: LayoutDashboard,
+          description: "System overview & analytics",
+        },
+        {
+          title: "Job Management",
+          icon: FileText,
+          items: [
+            {
+              title: "All Jobs",
+              href: "/jobs",
+              icon: FileText,
+              description: "View and manage all jobs",
+            },
+            {
+              title: "Create Job",
+              href: "/jobs/create",
+              icon: ClipboardList,
+              description: "Create new job orders",
+            },
+            {
+              title: "Job Progress",
+              href: "/jobs/progress",
+              icon: TrendingUp,
+              description: "Track job progress",
+            },
+            {
+              title: "Job Reports",
+              href: "/jobs/reports",
+              icon: BarChart3,
+              description: "Job analytics & reports",
+            },
+          ],
+        },
+        {
+          title: "Production Management",
+          icon: Factory,
+          items: [
+            {
+              title: "Machines",
+              href: "/machines",
+              icon: Printer,
+              description: "Machine management",
+            },
+            {
+              title: "Production Schedule",
+              href: "/production/schedule",
+              icon: ClipboardList,
+              description: "Schedule production",
+            },
+            {
+              title: "Quality Control",
+              href: "/production/quality",
+              icon: Target,
+              description: "Quality assurance",
+            },
+          ],
+        },
+        {
+          title: "Customer Management",
+          icon: Building,
+          items: [
+            {
+              title: "All Parties",
+              href: "/parties",
+              icon: Building,
+              description: "Customer & supplier management",
+            },
+            {
+              title: "Add Party",
+              href: "/parties/create",
+              icon: Building2,
+              description: "Add new customers/suppliers",
+            },
+            {
+              title: "CRM System",
+              href: "/crm",
+              icon: Users,
+              description: "Customer relationship management",
+            },
+            {
+              title: "Party Reports",
+              href: "/parties/reports",
+              icon: BarChart3,
+              description: "Customer analytics",
+            },
+          ],
+        },
+        {
+          title: "Financial Management",
+          icon: DollarSign,
+          items: [
+            {
+              title: "Transactions",
+              href: "/finance/transactions",
+              icon: CreditCard,
+              description: "Financial transactions",
+            },
+            {
+              title: "Invoices",
+              href: "/finance/invoices",
+              icon: FileText,
+              description: "Invoice management",
+            },
+            {
+              title: "Expenses",
+              href: "/expenses",
+              icon: Receipt,
+              description: "Expense tracking",
+            },
+            {
+              title: "Financial Reports",
+              href: "/finance/reports",
+              icon: BarChart3,
+              description: "Financial analytics",
+            },
+          ],
+        },
+        {
+          title: "Inventory Management",
+          icon: Package,
+          items: [
+            {
+              title: "All Items",
+              href: "/inventory",
+              icon: Package,
+              description: "Inventory overview",
+            },
+            {
+              title: "Stock Movements",
+              href: "/inventory/movements",
+              icon: TrendingUp,
+              description: "Stock transactions",
+            },
+            {
+              title: "Suppliers",
+              href: "/inventory/suppliers",
+              icon: Building2,
+              description: "Supplier management",
+            },
+            {
+              title: "Purchase Orders",
+              href: "/inventory/orders",
+              icon: FileText,
+              description: "Purchase order management",
+            },
+          ],
+        },
+        {
+          title: "User Management",
+          icon: Shield,
+          items: [
+            {
+              title: "All Users",
+              href: "/users",
+              icon: Users,
+              description: "User management",
+            },
+            {
+              title: "Add User",
+              href: "/users/create",
+              icon: UserCheck,
+              description: "Create new users",
+            },
+            {
+              title: "Roles & Permissions",
+              href: "/users/roles",
+              icon: Shield,
+              description: "Manage roles & permissions",
+            },
+          ],
+        },
+        {
+          title: "Reports & Analytics",
+          icon: PieChart,
+          items: [
+            {
+              title: "Business Reports",
+              href: "/reports",
+              icon: BarChart3,
+              description: "Comprehensive business reports",
+            },
+            {
+              title: "Performance Analytics",
+              href: "/analytics",
+              icon: TrendingUp,
+              description: "Performance metrics",
+            },
+          ],
+        },
+        {
+          title: "System Settings",
+          icon: Settings,
+          items: [
+            {
+              title: "General Settings",
+              href: "/settings",
+              icon: Settings,
+              description: "System configuration",
+            },
+            {
+              title: "System Configuration",
+              href: "/settings/system",
+              icon: Settings,
+              description: "Advanced settings",
+            },
+          ],
+        },
+      ];
+
+    case "supervisor":
+      return [
+        {
+          title: "Dashboard",
+          href: "/dashboard/supervisor",
+          icon: LayoutDashboard,
+          description: "Production overview",
+        },
+        {
+          title: "Job Management",
+          icon: FileText,
+          items: [
+            {
+              title: "All Jobs",
+              href: "/jobs",
+              icon: FileText,
+              description: "View and manage jobs",
+            },
+            {
+              title: "Create Job",
+              href: "/jobs/create",
+              icon: ClipboardList,
+              description: "Create new job orders",
+            },
+            {
+              title: "Job Progress",
+              href: "/jobs/progress",
+              icon: TrendingUp,
+              description: "Track job progress",
+            },
+            {
+              title: "Job Reports",
+              href: "/jobs/reports",
+              icon: BarChart3,
+              description: "Job performance reports",
+            },
+          ],
+        },
+        {
+          title: "Production Management",
+          icon: Factory,
+          items: [
+            {
+              title: "Machines",
+              href: "/machines",
+              icon: Printer,
+              description: "Machine monitoring",
+            },
+            {
+              title: "Production Schedule",
+              href: "/production/schedule",
+              icon: ClipboardList,
+              description: "Production planning",
+            },
+            {
+              title: "Quality Control",
+              href: "/production/quality",
+              icon: Target,
+              description: "Quality monitoring",
+            },
+          ],
+        },
+        {
+          title: "Customer Management",
+          icon: Building,
+          items: [
+            {
+              title: "All Parties",
+              href: "/parties",
+              icon: Building,
+              description: "Customer information",
+            },
+            {
+              title: "Add Party",
+              href: "/parties/create",
+              icon: Building2,
+              description: "Add new customers",
+            },
+            {
+              title: "CRM System",
+              href: "/crm",
+              icon: Users,
+              description: "Customer management",
+            },
+          ],
+        },
+        {
+          title: "Inventory",
+          icon: Package,
+          items: [
+            {
+              title: "All Items",
+              href: "/inventory",
+              icon: Package,
+              description: "Stock overview",
+            },
+            {
+              title: "Stock Movements",
+              href: "/inventory/movements",
+              icon: TrendingUp,
+              description: "Stock tracking",
+            },
+          ],
+        },
+        {
+          title: "Reports",
+          icon: BarChart3,
+          items: [
+            {
+              title: "Production Reports",
+              href: "/reports",
+              icon: BarChart3,
+              description: "Production analytics",
+            },
+            {
+              title: "Performance Analytics",
+              href: "/analytics",
+              icon: TrendingUp,
+              description: "Team performance",
+            },
+          ],
+        },
+      ];
+
+    case "finance":
+      return [
+        {
+          title: "Dashboard",
+          href: "/dashboard/finance",
+          icon: LayoutDashboard,
+          description: "Financial overview",
+        },
+        {
+          title: "Financial Management",
+          icon: DollarSign,
+          items: [
+            {
+              title: "Transactions",
+              href: "/finance/transactions",
+              icon: CreditCard,
+              description: "Payment transactions",
+            },
+            {
+              title: "Invoices",
+              href: "/finance/invoices",
+              icon: FileText,
+              description: "Invoice management",
+            },
+            {
+              title: "Expenses",
+              href: "/expenses",
+              icon: Receipt,
+              description: "Expense tracking",
+            },
+            {
+              title: "Financial Reports",
+              href: "/finance/reports",
+              icon: BarChart3,
+              description: "Financial analytics",
+            },
+          ],
+        },
+        {
+          title: "Customer Management",
+          icon: Building,
+          items: [
+            {
+              title: "All Parties",
+              href: "/parties",
+              icon: Building,
+              description: "Customer accounts",
+            },
+            {
+              title: "CRM System",
+              href: "/crm",
+              icon: Users,
+              description: "Customer relationships",
+            },
+            {
+              title: "Party Reports",
+              href: "/parties/reports",
+              icon: BarChart3,
+              description: "Customer financial reports",
+            },
+          ],
+        },
+        {
+          title: "Inventory",
+          icon: Package,
+          items: [
+            {
+              title: "All Items",
+              href: "/inventory",
+              icon: Package,
+              description: "Inventory valuation",
+            },
+            {
+              title: "Stock Movements",
+              href: "/inventory/movements",
+              icon: TrendingUp,
+              description: "Cost tracking",
+            },
+            {
+              title: "Suppliers",
+              href: "/inventory/suppliers",
+              icon: Building2,
+              description: "Supplier payments",
+            },
+            {
+              title: "Purchase Orders",
+              href: "/inventory/orders",
+              icon: FileText,
+              description: "Purchase management",
+            },
+          ],
+        },
+        {
+          title: "Reports",
+          icon: BarChart3,
+          items: [
+            {
+              title: "Financial Reports",
+              href: "/reports",
+              icon: BarChart3,
+              description: "Financial analytics",
+            },
+          ],
+        },
+      ];
+
+    case "operator":
+      return [
+        {
+          title: "Dashboard",
+          href: "/dashboard/operator",
+          icon: LayoutDashboard,
+          description: "My work overview",
+        },
+        {
+          title: "My Jobs",
+          icon: FileText,
+          items: [
+            {
+              title: "Assigned Jobs",
+              href: "/jobs",
+              icon: FileText,
+              description: "Jobs assigned to me",
+            },
+            {
+              title: "Job Progress",
+              href: "/jobs/progress",
+              icon: TrendingUp,
+              description: "Update job progress",
+            },
+          ],
+        },
+        {
+          title: "Production",
+          icon: Factory,
+          items: [
+            {
+              title: "Machines",
+              href: "/machines",
+              icon: Printer,
+              description: "Machine status",
+            },
+            {
+              title: "Quality Control",
+              href: "/production/quality",
+              icon: Target,
+              description: "Quality checks",
+            },
+          ],
+        },
+      ];
+
+    default:
+      return [];
+  }
+};
 
 const Sidebar = ({ collapsed = false }: SidebarProps) => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
-  
+
   // Simple state management for expanded items
-  const [expandedItems, setExpandedItems] = React.useState<string[]>(["Dashboard", "Job Management"]);
+  const [expandedItems, setExpandedItems] = React.useState<string[]>([
+    "Dashboard",
+  ]);
+
+  // Get role-specific navigation
+  const navigationItems = user ? getRoleBasedNavigation(user.role) : [];
 
   // Simple effect to auto-expand based on current route
   React.useEffect(() => {
     const newExpanded = ["Dashboard"];
-    
+
     // Auto-expand relevant sections based on pathname
     if (pathname.startsWith("/jobs")) {
-      newExpanded.push("Job Management");
+      newExpanded.push("Job Management", "My Jobs");
     }
-    if (pathname.startsWith("/machines") || pathname.startsWith("/production")) {
-      newExpanded.push("Production Management");
+    if (
+      pathname.startsWith("/machines") ||
+      pathname.startsWith("/production")
+    ) {
+      newExpanded.push("Production Management", "Production");
     }
     if (pathname.startsWith("/parties") || pathname.startsWith("/crm")) {
       newExpanded.push("Customer Management");
@@ -296,18 +576,18 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
       newExpanded.push("Financial Management");
     }
     if (pathname.startsWith("/inventory")) {
-      newExpanded.push("Inventory");
+      newExpanded.push("Inventory Management", "Inventory");
     }
     if (pathname.startsWith("/users")) {
       newExpanded.push("User Management");
     }
     if (pathname.startsWith("/reports") || pathname.startsWith("/analytics")) {
-      newExpanded.push("Reports & Analytics");
+      newExpanded.push("Reports & Analytics", "Reports");
     }
     if (pathname.startsWith("/settings")) {
-      newExpanded.push("Settings");
+      newExpanded.push("System Settings");
     }
-    
+
     setExpandedItems(newExpanded);
   }, [pathname]);
 
@@ -319,17 +599,6 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
     );
   };
 
-  const hasAccess = (roles?: string[]) => {
-    if (!roles || !user) return true;
-    return roles.includes(user.role);
-  };
-
-  const filteredNavigation = navigationItems.filter(
-    (item) =>
-      hasAccess(item.roles) ||
-      (item.items && item.items.some((subItem) => hasAccess(subItem.roles)))
-  );
-
   const isItemActive = (href?: string) => {
     if (!href) return false;
     return pathname === href || pathname.startsWith(href + "/");
@@ -339,6 +608,8 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
     logout();
     router.push("/sign-in");
   };
+
+  if (!user) return null;
 
   return (
     <div
@@ -360,7 +631,7 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
       </div>
 
       {/* User Info */}
-      {!collapsed && user && (
+      {!collapsed && (
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
@@ -380,13 +651,8 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-        {filteredNavigation.map((item) => {
+        {navigationItems.map((item) => {
           const isExpanded = expandedItems.includes(item.title);
-          const hasVisibleItems = item.items?.some((subItem) =>
-            hasAccess(subItem.roles)
-          );
-
-          if (!hasVisibleItems && item.items) return null;
 
           return (
             <div key={item.title}>
@@ -399,9 +665,19 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
                       ? "bg-blue-100 text-blue-700"
                       : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   )}
+                  title={!collapsed ? undefined : item.description}
                 >
                   <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
-                  {!collapsed && <span>{item.title}</span>}
+                  {!collapsed && (
+                    <div className="flex-1">
+                      <span>{item.title}</span>
+                      {item.description && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </Link>
               ) : (
                 <button
@@ -410,6 +686,7 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
                     "group flex items-center w-full px-2 py-2 text-sm font-medium rounded-md transition-colors text-left",
                     "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   )}
+                  title={!collapsed ? undefined : item.title}
                 >
                   <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
                   {!collapsed && (
@@ -428,23 +705,28 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
               {/* Sub-items */}
               {item.items && !collapsed && isExpanded && (
                 <div className="mt-1 space-y-1">
-                  {item.items
-                    .filter((subItem) => hasAccess(subItem.roles))
-                    .map((subItem) => (
-                      <Link
-                        key={subItem.title}
-                        href={subItem.href!}
-                        className={cn(
-                          "group flex items-center pl-8 pr-2 py-2 text-sm rounded-md transition-colors",
-                          isItemActive(subItem.href)
-                            ? "bg-blue-100 text-blue-700 font-medium"
-                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        )}
-                      >
-                        <subItem.icon className="mr-3 h-4 w-4 flex-shrink-0" />
+                  {item.items.map((subItem) => (
+                    <Link
+                      key={subItem.title}
+                      href={subItem.href!}
+                      className={cn(
+                        "group flex items-center pl-8 pr-2 py-2 text-sm rounded-md transition-colors",
+                        isItemActive(subItem.href)
+                          ? "bg-blue-100 text-blue-700 font-medium"
+                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      )}
+                    >
+                      <subItem.icon className="mr-3 h-4 w-4 flex-shrink-0" />
+                      <div className="flex-1">
                         <span>{subItem.title}</span>
-                      </Link>
-                    ))}
+                        {subItem.description && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {subItem.description}
+                          </p>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
                 </div>
               )}
             </div>
@@ -460,6 +742,7 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
             "group flex items-center w-full px-2 py-2 text-sm font-medium rounded-md transition-colors",
             "text-gray-600 hover:bg-red-50 hover:text-red-700"
           )}
+          title={!collapsed ? undefined : "Sign Out"}
         >
           <LogOut className="mr-3 h-5 w-5 flex-shrink-0" />
           {!collapsed && <span>Sign Out</span>}

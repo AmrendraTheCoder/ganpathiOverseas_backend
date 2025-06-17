@@ -45,8 +45,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
+import DashboardPageLayout from "@/components/layout/DashboardPageLayout";
+import { RoleBasedAccess } from "@/components/auth/RoleBasedAccess";
 
-const SettingsPage = () => {
+const SettingsPageContent = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("general");
   const [settings, setSettings] = useState({
@@ -150,7 +152,7 @@ const SettingsPage = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -866,6 +868,16 @@ const SettingsPage = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+const SettingsPage = () => {
+  return (
+    <DashboardPageLayout>
+      <RoleBasedAccess allowedRoles={["admin"]}>
+        <SettingsPageContent />
+      </RoleBasedAccess>
+    </DashboardPageLayout>
   );
 };
 
