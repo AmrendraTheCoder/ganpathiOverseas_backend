@@ -153,7 +153,7 @@ const OperatorDashboardContent = () => {
     if (!loading && jobs.length >= 0) {
       const interval = setInterval(() => {
         fetchData();
-      }, 60000); // Reduced to every 60 seconds instead of 30
+      }, 120000); // Increased to every 2 minutes to match other pages and reduce load
       return () => clearInterval(interval);
     }
   }, [loading, jobs.length]);
@@ -521,7 +521,7 @@ const OperatorDashboardContent = () => {
   const todaysStats = calculateTodaysStats();
 
   return (
-    <div className="space-y-6 p-6 bg-gradient-to-br from-blue-50 via-white to-purple-50 min-h-screen">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -782,9 +782,6 @@ const OperatorDashboardContent = () => {
                       </CardDescription>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-semibold">
-                        ₹{job.selling_price.toLocaleString()}
-                      </p>
                       <p className="text-sm text-gray-500">
                         Due:{" "}
                         {job.due_date ? formatDate(job.due_date) : "Not set"}

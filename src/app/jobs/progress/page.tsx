@@ -136,13 +136,13 @@ export default function JobProgress() {
     fetchJobs(true);
   }, [fetchJobs]);
 
-  // Real-time updates every 10 seconds
+  // Real-time updates every 60 seconds (further increased to reduce load)
   useEffect(() => {
     if (!isRealTimeEnabled) return;
 
     const interval = setInterval(() => {
       fetchJobs(false); // Don't show loading state for real-time updates
-    }, 10000); // 10 seconds
+    }, 60000); // 60 seconds - more conservative interval
 
     return () => clearInterval(interval);
   }, [fetchJobs, isRealTimeEnabled]);

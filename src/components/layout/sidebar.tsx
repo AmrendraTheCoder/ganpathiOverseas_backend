@@ -601,13 +601,15 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
       )}
     >
       {/* Header */}
-      <div className="flex items-center h-16 px-4 border-b border-gray-200">
+      <div className="flex items-center justify-start h-16 px-4 border-b border-gray-200">
         {!collapsed && (
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">
+          <div className="flex flex-col justify-center">
+            <h1 className="text-lg font-bold text-gray-900 leading-tight">
               Ganpathi Overseas
             </h1>
-            <p className="text-xs text-gray-500">Job Management System</p>
+            <p className="text-xs text-gray-500 leading-tight mt-0.5">
+              Job Management System
+            </p>
           </div>
         )}
       </div>

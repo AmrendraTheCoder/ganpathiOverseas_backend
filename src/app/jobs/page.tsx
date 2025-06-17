@@ -94,6 +94,7 @@ import { formatDate } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import APIThrottle from "@/lib/api-throttle";
 
 interface Job {
   id: string;
@@ -226,7 +227,7 @@ const JobsPageContent = () => {
     if (!loading && user?.id) {
       const interval = setInterval(() => {
         fetchData();
-      }, 120000); // Increased to every 2 minutes to reduce load
+      }, 180000); // Increased to every 3 minutes to further reduce load
       return () => clearInterval(interval);
     }
   }, [loading, user?.id]);
@@ -234,9 +235,9 @@ const JobsPageContent = () => {
   const fetchData = async () => {
     if (!user?.id) return;
 
-    // Throttle API calls - don't fetch if less than 5 seconds since last fetch
+    // Throttle API calls - don't fetch if less than 10 seconds since last fetch (increased from 5)
     const now = Date.now();
-    if (now - lastFetchTime.current < 5000) {
+    if (now - lastFetchTime.current < 10000) {
       console.log("🚫 Throttling API call - too soon since last fetch");
       return;
     }
@@ -483,7 +484,7 @@ const JobsPageContent = () => {
 
   const getJobCardGradient = (job: Job) => {
     if (job.id === activeJobId) {
-      return "bg-gradient-to-br from-blue-50 via-cyan-50 to-purple-50 border-2 border-blue-400 shadow-2xl transform scale-105 transition-all duration-300";
+      return "bg-gradient-to-br from-blue-50 via-cyan-50 to-purple-50 border-2 border-blue-400 shadow-lg transition-all duration-300";
     }
     switch (job.status) {
       case "pending":
@@ -541,7 +542,7 @@ const JobsPageContent = () => {
   }
 
   return (
-    <div className="space-y-6 p-6 bg-gradient-to-br from-blue-50 via-white to-purple-50 min-h-screen">
+    <div className="space-y-6">
       {/* Header with Live Time */}
       <div className="flex justify-between items-center">
         <div>
@@ -681,7 +682,7 @@ const JobsPageContent = () => {
         </TabsList>
 
         {/* Active Jobs */}
-        <TabsContent value="active" className="space-y-4">
+        <TabsContent value="active" className="space-y-3">
           {filteredJobs.length === 0 ? (
             <Card className="shadow-lg">
               <CardContent className="p-12 text-center">
@@ -700,160 +701,115 @@ const JobsPageContent = () => {
                 key={job.id}
                 className={`transition-all duration-300 ${getJobCardGradient(job)}`}
               >
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
+                <CardContent className="p-3">
+                  {/* Single Row Layout - Everything in one line */}
+                  <div className="flex items-center justify-between">
+                    {/* Left Section: Status, Title, Job Info */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {/* Status Badges */}
+                      <div className="flex items-center gap-1">
                         <Badge className={getStatusColor(job.status)}>
-                          {job.status.replace("_", " ").toUpperCase()}
+                          {job.status === "in_progress"
+                            ? "IN PROGRESS"
+                            : job.status.replace("_", " ").toUpperCase()}
                         </Badge>
                         <Badge
                           variant="outline"
                           className={`border-2 ${getPriorityColor(job.priority)}`}
                         >
-                          <Target className="h-3 w-3 mr-1" />
-                          Priority {job.priority}
+                          P{job.priority}
                         </Badge>
                         {job.id === activeJobId && (
                           <Badge className="bg-gradient-to-r from-green-400 to-blue-500 text-white animate-pulse">
-                            🔥 ACTIVE NOW
+                            🔥 ACTIVE
                           </Badge>
                         )}
                       </div>
-                      <div>
-                        <CardTitle className="text-xl text-gray-800">
+
+                      {/* Job Title and Details */}
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-bold text-base text-gray-800 truncate">
                           {job.title}
-                        </CardTitle>
-                        <CardDescription className="flex items-center gap-2 text-gray-600">
-                          <FileText className="h-4 w-4" />
-                          {job.job_number} •
-                          <Users className="h-4 w-4" />
-                          {job.parties.name}
-                        </CardDescription>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                        ₹{job.selling_price.toLocaleString()}
-                      </p>
-                      <p className="text-sm text-gray-500 flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        Due:{" "}
-                        {job.due_date ? formatDate(job.due_date) : "Not set"}
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  {/* Active Job Timer Display */}
-                  {job.id === activeJobId && currentTiming && (
-                    <div className="p-4 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-lg border-2 border-blue-300 shadow-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-blue-500 p-2 rounded-lg animate-pulse">
-                            <Timer className="h-5 w-5 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-blue-700">
-                              Currently Running
-                            </p>
-                            <p className="text-xl font-mono font-bold text-blue-900">
-                              {formatDuration(currentTiming.elapsedTime)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            onClick={() => setShowTimingModal(true)}
-                            variant="outline"
-                            size="sm"
-                            className="border-blue-300 hover:border-blue-400 bg-white"
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Timer
-                          </Button>
-                          <div className="flex items-center gap-2 text-sm">
-                            <div
-                              className={`h-2 w-2 rounded-full ${currentTiming.isPaused ? "bg-yellow-500" : "bg-green-500 animate-pulse"}`}
-                            />
-                            <span className="text-blue-700 font-medium">
-                              {currentTiming.isPaused ? "Paused" : "Active"}
+                        </h3>
+                        <div className="flex items-center gap-3 text-xs text-gray-600">
+                          <span className="flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            {job.job_number}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            {job.parties.name}
+                          </span>
+                          <span>
+                            Qty:{" "}
+                            <strong>{job.quantity.toLocaleString()}</strong>
+                          </span>
+                          <span>
+                            Machine:{" "}
+                            <strong>
+                              {job.machines?.name || "Not assigned"}
+                            </strong>
+                          </span>
+                          {job.id === activeJobId && currentTiming && (
+                            <span className="flex items-center gap-1 text-blue-600">
+                              <Timer className="h-3 w-3" />
+                              <strong className="font-mono text-xs">
+                                {formatDuration(currentTiming.elapsedTime)}
+                              </strong>
                             </span>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* Job Details Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="p-3 bg-white bg-opacity-70 rounded-lg shadow-sm">
-                      <p className="text-gray-500 text-xs font-medium">
-                        QUANTITY
-                      </p>
-                      <p className="font-bold text-lg text-gray-800">
-                        {job.quantity.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-white bg-opacity-70 rounded-lg shadow-sm">
-                      <p className="text-gray-500 text-xs font-medium">
-                        MACHINE
-                      </p>
-                      <p className="font-bold text-sm text-gray-800">
-                        {job.machines?.name || "Not assigned"}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-white bg-opacity-70 rounded-lg shadow-sm">
-                      <p className="text-gray-500 text-xs font-medium">
-                        COLORS
-                      </p>
-                      <p className="font-bold text-sm text-gray-800">
-                        {job.colors || "N/A"}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-white bg-opacity-70 rounded-lg shadow-sm">
-                      <p className="text-gray-500 text-xs font-medium">
-                        PAPER TYPE
-                      </p>
-                      <p className="font-bold text-sm text-gray-800">
-                        {job.paper_type || "N/A"}
-                      </p>
-                    </div>
-                  </div>
+                    {/* Right Section: Due Date, Actions */}
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500">
+                          Due:{" "}
+                          {job.due_date ? formatDate(job.due_date) : "Not set"}
+                        </p>
+                      </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-2 pt-2">
-                    {user?.role === "operator" && (
-                      <>
-                        {job.status === "pending" && job.id !== activeJobId && (
-                          <Button
-                            onClick={() => handleStartJob(job)}
-                            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg"
-                          >
-                            <Play className="h-4 w-4 mr-2" />
-                            Start Job
-                          </Button>
+                      {/* Action Buttons */}
+                      <div className="flex gap-1">
+                        {user?.role === "operator" && (
+                          <>
+                            {job.status === "pending" &&
+                              job.id !== activeJobId && (
+                                <Button
+                                  onClick={() => handleStartJob(job)}
+                                  size="sm"
+                                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
+                                >
+                                  <Play className="h-3 w-3 mr-1" />
+                                  Start
+                                </Button>
+                              )}
+                            {(job.id === activeJobId ||
+                              job.status === "in_progress") && (
+                              <Button
+                                onClick={() => handleCompleteJob(job)}
+                                size="sm"
+                                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
+                              >
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Complete
+                              </Button>
+                            )}
+                          </>
                         )}
-                        {job.id === activeJobId && (
-                          <Button
-                            onClick={() => handleCompleteJob(job)}
-                            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Complete Job
-                          </Button>
-                        )}
-                      </>
-                    )}
-                    <Button
-                      onClick={() => setSelectedJob(job)}
-                      variant="outline"
-                      className="border-2 border-gray-300 hover:border-gray-400 bg-white shadow-md"
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Details
-                    </Button>
+                        <Button
+                          onClick={() => setSelectedJob(job)}
+                          variant="outline"
+                          size="sm"
+                          className="border border-gray-300 hover:border-gray-400"
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          Details
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -862,7 +818,7 @@ const JobsPageContent = () => {
         </TabsContent>
 
         {/* Completed Jobs */}
-        <TabsContent value="completed" className="space-y-4">
+        <TabsContent value="completed" className="space-y-3">
           {filteredCompletedJobs.length === 0 ? (
             <Card className="shadow-lg">
               <CardContent className="p-12 text-center">
@@ -876,35 +832,33 @@ const JobsPageContent = () => {
           ) : (
             filteredCompletedJobs.map((job) => (
               <Card key={job.id} className={getJobCardGradient(job)}>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
+                <CardContent className="p-4">
+                  {/* Main Job Information Row */}
+                  <div className="flex items-center justify-between mb-3">
+                    {/* Left Section: Title, ID, Customer */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
                         <Badge className={getStatusColor(job.status)}>
-                          ✅ COMPLETED
+                          {job.status.replace("_", " ").toUpperCase()}
                         </Badge>
                         <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white">
-                          <Award className="h-3 w-3 mr-1" />
-                          Priority {job.priority}
+                          <Award className="h-3 w-3 mr-1" />P{job.priority}
                         </Badge>
                       </div>
-                      <div>
-                        <CardTitle className="text-xl text-gray-800">
-                          {job.title}
-                        </CardTitle>
-                        <CardDescription className="flex items-center gap-2 text-gray-600">
-                          <FileText className="h-4 w-4" />
-                          {job.job_number} •
-                          <Users className="h-4 w-4" />
-                          {job.parties.name}
-                        </CardDescription>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                        ₹{job.selling_price.toLocaleString()}
+                      <h3 className="font-bold text-lg text-gray-800 truncate">
+                        {job.title}
+                      </h3>
+                      <p className="text-sm text-gray-600 flex items-center gap-2">
+                        <FileText className="h-3 w-3" />
+                        {job.job_number} •
+                        <Users className="h-3 w-3" />
+                        {job.parties.name}
                       </p>
-                      <p className="text-sm text-green-600 flex items-center gap-1">
+                    </div>
+
+                    {/* Right Section: Price and Completion Date */}
+                    <div className="text-right ml-4">
+                      <p className="text-sm text-green-600 flex items-center gap-1 justify-end">
                         <CheckCircle className="h-3 w-3" />
                         Completed:{" "}
                         {job.completed_at
@@ -913,16 +867,46 @@ const JobsPageContent = () => {
                       </p>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <Button
-                    onClick={() => setSelectedJob(job)}
-                    variant="outline"
-                    className="border-2 border-gray-300 hover:border-gray-400 bg-white shadow-md"
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
-                    View Details
-                  </Button>
+
+                  {/* Compact Job Details and Actions Row */}
+                  <div className="flex items-center justify-between">
+                    {/* Job Details - Horizontal Layout */}
+                    <div className="flex items-center gap-4 text-sm">
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500 font-medium">Qty:</span>
+                        <span className="font-bold text-gray-800">
+                          {job.quantity.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500 font-medium">
+                          Machine:
+                        </span>
+                        <span className="font-bold text-gray-800 truncate max-w-[100px]">
+                          {job.machines?.name || "Not assigned"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500 font-medium">
+                          Colors:
+                        </span>
+                        <span className="font-bold text-gray-800">
+                          {job.colors || "N/A"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action Button - Compact */}
+                    <Button
+                      onClick={() => setSelectedJob(job)}
+                      variant="outline"
+                      size="sm"
+                      className="border-2 border-gray-300 hover:border-gray-400 bg-white"
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Details
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))
@@ -1013,16 +997,6 @@ const JobsPageContent = () => {
             <div className="space-y-6">
               {/* Header Stats Row */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-                  <CardContent className="p-4 text-center">
-                    <div className="text-3xl font-bold text-green-600 mb-1">
-                      ₹{selectedJob.selling_price.toLocaleString()}
-                    </div>
-                    <p className="text-sm text-green-700 font-medium">
-                      Total Value
-                    </p>
-                  </CardContent>
-                </Card>
                 <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200">
                   <CardContent className="p-4 text-center">
                     <div className="text-3xl font-bold text-blue-600 mb-1">
@@ -1030,6 +1004,16 @@ const JobsPageContent = () => {
                     </div>
                     <p className="text-sm text-blue-700 font-medium">
                       Quantity
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+                  <CardContent className="p-4 text-center">
+                    <div className="text-lg font-bold text-green-600 mb-1">
+                      {selectedJob.machines?.name || "Not Assigned"}
+                    </div>
+                    <p className="text-sm text-green-700 font-medium">
+                      Machine
                     </p>
                   </CardContent>
                 </Card>
@@ -1319,7 +1303,8 @@ const JobsPageContent = () => {
                             Start Job
                           </Button>
                         )}
-                      {selectedJob.id === activeJobId && (
+                      {(selectedJob.id === activeJobId ||
+                        selectedJob.status === "in_progress") && (
                         <Button
                           onClick={() => {
                             handleCompleteJob(selectedJob);
