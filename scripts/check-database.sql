@@ -102,4 +102,4 @@ SELECT
     updated_at,
     role
 FROM auth.users
-LIMIT 10; 
+LIMIT 10;

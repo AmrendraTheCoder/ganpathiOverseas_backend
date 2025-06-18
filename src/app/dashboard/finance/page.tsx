@@ -1,19 +1,6 @@
 "use client";
 
-import React from "react";
-import {
-  DollarSign,
-  CreditCard,
-  TrendingUp,
-  TrendingDown,
-  FileText,
-  AlertCircle,
-  Building,
-  Calendar,
-  Plus,
-  Download,
-  Eye,
-} from "lucide-react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -21,432 +8,718 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  getDashboardStats,
-  demoTransactions,
-  demoExpenses,
-  demoParties,
-  demoJobSheets,
-  getPartyById,
-  getJobSheetById,
-} from "@/data/demo-data";
-import { formatDate, formatCurrency } from "@/lib/utils";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  CreditCard,
+  PieChart,
+  BarChart3,
+  Download,
+  RefreshCw,
+  Target,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Filter,
+  ArrowUpRight,
+  ArrowDownRight,
+} from "lucide-react";
+import { toast } from "@/components/ui/use-toast";
+import DatabaseConnectionStatus from "@/components/DatabaseConnectionStatus";
 
-const FinanceDashboard = () => {
-  const stats = getDashboardStats("finance");
+// Mock data for demonstration
+const mockFinanceData = {
+  overview: {
+    totalRevenue: 2450000,
+    totalExpenses: 1820000,
+    netProfit: 630000,
+    profitMargin: 25.7,
+    previousMonth: {
+      revenue: 2200000,
+      expenses: 1650000,
+      profit: 550000,
+    },
+  },
+  cashFlow: {
+    inflow: 2450000,
+    outflow: 1820000,
+    netFlow: 630000,
+    bankBalance: 850000,
+    accountsReceivable: 420000,
+    accountsPayable: 280000,
+  },
+  recentTransactions: [
+    {
+      id: 1,
+      type: "Income",
+      description: "Job Sheet Payment - ABC Corp",
+      amount: 85000,
+      date: "2024-01-15",
+      status: "Completed",
+    },
+    {
+      id: 2,
+      type: "Expense",
+      description: "Raw Material Purchase",
+      amount: -45000,
+      date: "2024-01-14",
+      status: "Completed",
+    },
+    {
+      id: 3,
+      type: "Income",
+      description: "Invoice Payment - XYZ Ltd",
+      amount: 120000,
+      date: "2024-01-13",
+      status: "Completed",
+    },
+    {
+      id: 4,
+      type: "Expense",
+      description: "Machine Maintenance",
+      amount: -15000,
+      date: "2024-01-12",
+      status: "Pending",
+    },
+    {
+      id: 5,
+      type: "Income",
+      description: "Service Revenue",
+      amount: 65000,
+      date: "2024-01-11",
+      status: "Completed",
+    },
+  ],
+  monthlyTargets: {
+    revenueTarget: 2800000,
+    expenseTarget: 1900000,
+    profitTarget: 700000,
+    currentRevenue: 2450000,
+    currentExpenses: 1820000,
+    currentProfit: 630000,
+  },
+  expenseCategories: [
+    { name: "Raw Materials", amount: 680000, percentage: 37.4 },
+    { name: "Labor Costs", amount: 450000, percentage: 24.7 },
+    { name: "Utilities", amount: 220000, percentage: 12.1 },
+    { name: "Machine Maintenance", amount: 180000, percentage: 9.9 },
+    { name: "Office Expenses", amount: 150000, percentage: 8.2 },
+    { name: "Others", amount: 140000, percentage: 7.7 },
+  ],
+  alerts: [
+    {
+      type: "warning",
+      message: "Outstanding receivables increasing - ₹4.2L pending",
+      priority: "medium",
+    },
+    {
+      type: "info",
+      message: "Monthly profit target 90% achieved",
+      priority: "low",
+    },
+    {
+      type: "success",
+      message: "All vendor payments completed on time",
+      priority: "low",
+    },
+  ],
+};
 
-  const pendingInvoices = demoTransactions.filter(
-    (t) => t.type === "invoice" && t.status === "pending"
-  );
+export default function FinanceDashboard() {
+  const [selectedPeriod, setSelectedPeriod] = useState("month");
+  const [refreshing, setRefreshing] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
 
-  const recentTransactions = demoTransactions.slice(0, 6);
-  const recentExpenses = demoExpenses.slice(0, 5);
-
-  const overdueInvoices = demoTransactions.filter(
-    (t) =>
-      t.type === "invoice" &&
-      t.status === "pending" &&
-      t.dueDate &&
-      new Date(t.dueDate) < new Date()
-  );
-
-  const getStatusBadge = (status: string) => {
-    const statusColors = {
-      pending: "bg-yellow-100 text-yellow-800",
-      paid: "bg-green-100 text-green-800",
-      overdue: "bg-red-100 text-red-800",
-      cancelled: "bg-gray-100 text-gray-800",
-    };
-    return (
-      statusColors[status as keyof typeof statusColors] ||
-      "bg-gray-100 text-gray-800"
-    );
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    setRefreshing(false);
+    toast({
+      title: "Data Refreshed",
+      description: "Financial data has been updated successfully.",
+    });
   };
 
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case "invoice":
-        return <FileText className="h-4 w-4" />;
-      case "payment":
-        return <DollarSign className="h-4 w-4" />;
-      case "credit":
-        return <TrendingUp className="h-4 w-4" />;
-      case "debit":
-        return <TrendingDown className="h-4 w-4" />;
-      default:
-        return <CreditCard className="h-4 w-4" />;
-    }
+  const handleExportReport = () => {
+    toast({
+      title: "Exporting Report",
+      description: "Financial report is being generated...",
+    });
   };
 
-  const StatCard = ({
-    title,
-    value,
-    icon: Icon,
-    description,
-    trend,
-    color = "blue",
-  }: any) => (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className={`h-4 w-4 text-${color}-600`} />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
-        {trend && (
-          <div className="flex items-center space-x-1 text-xs">
-            <TrendingUp className="h-3 w-3 text-green-600" />
-            <span className="text-green-600">{trend}</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+  const calculateGrowthPercentage = (current: number, previous: number) => {
+    return (((current - previous) / previous) * 100).toFixed(1);
+  };
+
+  const revenueGrowth = calculateGrowthPercentage(
+    mockFinanceData.overview.totalRevenue,
+    mockFinanceData.overview.previousMonth.revenue
+  );
+  const profitGrowth = calculateGrowthPercentage(
+    mockFinanceData.overview.netProfit,
+    mockFinanceData.overview.previousMonth.profit
   );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="flex-1 space-y-6 p-6">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
             Finance Dashboard
           </h1>
           <p className="text-muted-foreground">
-            Financial overview and transaction management
+            Monitor financial performance and cash flow in real-time
           </p>
+          <div className="mt-2">
+            <DatabaseConnectionStatus variant="compact" />
+          </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm">
-            <Download className="mr-2 h-4 w-4" />
+          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Select period" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="week">This Week</SelectItem>
+              <SelectItem value="month">This Month</SelectItem>
+              <SelectItem value="quarter">This Quarter</SelectItem>
+              <SelectItem value="year">This Year</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportReport}>
+            <Download className="h-4 w-4 mr-2" />
             Export
-          </Button>
-          <Button variant="outline" size="sm">
-            <Calendar className="mr-2 h-4 w-4" />
-            Reports
-          </Button>
-          <Button size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            New Invoice
           </Button>
         </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total Revenue"
-          value={formatCurrency(stats.totalRevenue)}
-          icon={DollarSign}
-          description="This month"
-          trend="+12% from last month"
-          color="green"
-        />
-        <StatCard
-          title="Pending Invoices"
-          value={stats.pendingInvoices}
-          icon={FileText}
-          description="Awaiting payment"
-          color="yellow"
-        />
-        <StatCard
-          title="Overdue Invoices"
-          value={stats.overdueInvoices}
-          icon={AlertCircle}
-          description="Past due date"
-          color="red"
-        />
-        <StatCard
-          title="Active Parties"
-          value={stats.totalParties}
-          icon={Building}
-          description="Customer accounts"
-          color="blue"
-        />
-      </div>
+      {/* Alerts Section */}
+      {mockFinanceData.alerts.length > 0 && (
+        <div className="grid gap-4">
+          {mockFinanceData.alerts.map((alert, index) => (
+            <div
+              key={index}
+              className={`flex items-center p-4 rounded-lg border ${
+                alert.type === "warning"
+                  ? "bg-yellow-50 border-yellow-200"
+                  : alert.type === "success"
+                    ? "bg-green-50 border-green-200"
+                    : "bg-blue-50 border-blue-200"
+              }`}
+            >
+              {alert.type === "warning" && (
+                <AlertTriangle className="h-5 w-5 text-yellow-600 mr-3" />
+              )}
+              {alert.type === "success" && (
+                <CheckCircle className="h-5 w-5 text-green-600 mr-3" />
+              )}
+              {alert.type === "info" && (
+                <Clock className="h-5 w-5 text-blue-600 mr-3" />
+              )}
+              <span className="text-sm font-medium">{alert.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* Secondary Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          title="Monthly Expenses"
-          value={formatCurrency(stats.monthlyExpenses)}
-          icon={TrendingDown}
-          description="This month"
-          trend="+8% from last month"
-          color="red"
-        />
-        <StatCard
-          title="Monthly Revenue"
-          value={formatCurrency(stats.monthlyRevenue)}
-          icon={TrendingUp}
-          description="This month"
-          trend="+15% from last month"
-          color="green"
-        />
-        <StatCard
-          title="Net Profit"
-          value={formatCurrency(stats.totalRevenue - stats.monthlyExpenses)}
-          icon={DollarSign}
-          description="This month"
-          trend="+22% from last month"
-          color="emerald"
-        />
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Pending Invoices */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Pending Invoices</CardTitle>
-            <CardDescription>Invoices awaiting payment</CardDescription>
+      {/* Key Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="relative overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {pendingInvoices.map((invoice) => {
-                const party = getPartyById(invoice.partyId);
-                const job = getJobSheetById(invoice.jobId || "");
-                const isOverdue =
-                  invoice.dueDate && new Date(invoice.dueDate) < new Date();
-
-                return (
-                  <div
-                    key={invoice.id}
-                    className="flex items-center justify-between space-x-4 p-3 border rounded-lg"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center space-x-2">
-                        <p className="text-sm font-medium">
-                          {invoice.referenceNumber}
-                        </p>
-                        <Badge
-                          className={getStatusBadge(
-                            isOverdue ? "overdue" : invoice.status
-                          )}
-                        >
-                          {isOverdue ? "Overdue" : "Pending"}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {party?.name} • {job?.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Due:{" "}
-                        {invoice.dueDate ? formatDate(invoice.dueDate) : "TBD"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">
-                        {formatCurrency(invoice.amount)}
-                      </p>
-                      <div className="flex items-center space-x-1">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="text-2xl font-bold">
+              ₹{(mockFinanceData.overview.totalRevenue / 100000).toFixed(1)}L
             </div>
-            <Button variant="outline" className="w-full mt-4">
-              View All Invoices
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Recent Transactions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Transactions</CardTitle>
-            <CardDescription>Latest financial activities</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentTransactions.map((transaction) => {
-                const party = getPartyById(transaction.partyId);
-                const isCredit = ["payment", "credit"].includes(
-                  transaction.type
-                );
-
-                return (
-                  <div
-                    key={transaction.id}
-                    className="flex items-center space-x-4"
-                  >
-                    <div
-                      className={`p-2 rounded-lg ${isCredit ? "bg-green-100" : "bg-blue-100"}`}
-                    >
-                      {getTransactionIcon(transaction.type)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">
-                        {transaction.description}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {party?.name} •{" "}
-                        {formatDate(transaction.transactionDate)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p
-                        className={`text-sm font-medium ${isCredit ? "text-green-600" : "text-blue-600"}`}
-                      >
-                        {isCredit ? "+" : ""}
-                        {formatCurrency(transaction.amount)}
-                      </p>
-                      <Badge className={getStatusBadge(transaction.status)}>
-                        {transaction.status}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <Button variant="outline" className="w-full mt-4">
-              View All Transactions
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Expenses */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Expenses</CardTitle>
-          <CardDescription>Latest business expenses and costs</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {recentExpenses.map((expense) => (
-              <div
-                key={expense.id}
-                className="flex items-center justify-between space-x-4 p-3 bg-muted/50 rounded-lg"
+            <div className="flex items-center text-xs text-muted-foreground">
+              {parseFloat(revenueGrowth) > 0 ? (
+                <ArrowUpRight className="h-3 w-3 mr-1 text-green-500" />
+              ) : (
+                <ArrowDownRight className="h-3 w-3 mr-1 text-red-500" />
+              )}
+              <span
+                className={
+                  parseFloat(revenueGrowth) > 0
+                    ? "text-green-500"
+                    : "text-red-500"
+                }
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center space-x-2">
-                    <p className="text-sm font-medium">{expense.description}</p>
-                    <Badge variant="outline" className="capitalize">
-                      {expense.category}
-                    </Badge>
-                    {expense.isRecurring && (
-                      <Badge variant="secondary">Recurring</Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {expense.vendorName} • {formatDate(expense.expenseDate)}
-                  </p>
-                  {expense.invoiceNumber && (
-                    <p className="text-xs text-muted-foreground">
-                      Invoice: {expense.invoiceNumber}
+                {revenueGrowth}% from last month
+              </span>
+            </div>
+          </CardContent>
+          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600" />
+        </Card>
+
+        <Card className="relative overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total Expenses
+            </CardTitle>
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ₹{(mockFinanceData.overview.totalExpenses / 100000).toFixed(1)}L
+            </div>
+            <div className="flex items-center text-xs text-muted-foreground">
+              <ArrowUpRight className="h-3 w-3 mr-1 text-red-500" />
+              <span className="text-red-500">
+                {calculateGrowthPercentage(
+                  mockFinanceData.overview.totalExpenses,
+                  mockFinanceData.overview.previousMonth.expenses
+                )}
+                % from last month
+              </span>
+            </div>
+          </CardContent>
+          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-red-400 to-red-600" />
+        </Card>
+
+        <Card className="relative overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ₹{(mockFinanceData.overview.netProfit / 100000).toFixed(1)}L
+            </div>
+            <div className="flex items-center text-xs text-muted-foreground">
+              <ArrowUpRight className="h-3 w-3 mr-1 text-green-500" />
+              <span className="text-green-500">
+                {profitGrowth}% from last month
+              </span>
+            </div>
+          </CardContent>
+          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600" />
+        </Card>
+
+        <Card className="relative overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Profit Margin</CardTitle>
+            <PieChart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {mockFinanceData.overview.profitMargin}%
+            </div>
+            <div className="flex items-center text-xs text-muted-foreground">
+              <span>Industry avg: 18-22%</span>
+            </div>
+          </CardContent>
+          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600" />
+        </Card>
+      </div>
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="cashflow">Cash Flow</TabsTrigger>
+          <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="targets">Targets</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Revenue Trend Chart Placeholder */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <BarChart3 className="h-5 w-5 mr-2" />
+                  Revenue vs Expenses Trend
+                </CardTitle>
+                <CardDescription>
+                  Monthly comparison over the last 6 months
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg">
+                  <div className="text-center">
+                    <BarChart3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <p className="text-sm text-gray-500">
+                      Interactive Chart Coming Soon
                     </p>
-                  )}
+                    <p className="text-xs text-gray-400 mt-1">
+                      Chart.js integration in progress
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-red-600">
-                    {formatCurrency(expense.amount)}
-                  </p>
-                  <p className="text-xs text-muted-foreground capitalize">
-                    {expense.paymentMethod}
+              </CardContent>
+            </Card>
+
+            {/* Recent Transactions */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Transactions</CardTitle>
+                <CardDescription>Latest financial activities</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {mockFinanceData.recentTransactions
+                    .slice(0, 5)
+                    .map((transaction) => (
+                      <div
+                        key={transaction.id}
+                        className="flex items-center justify-between"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div
+                            className={`p-2 rounded-full ${
+                              transaction.type === "Income"
+                                ? "bg-green-100"
+                                : "bg-red-100"
+                            }`}
+                          >
+                            {transaction.type === "Income" ? (
+                              <TrendingUp className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <TrendingDown className="h-4 w-4 text-red-600" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">
+                              {transaction.description}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {transaction.date}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p
+                            className={`text-sm font-medium ${
+                              transaction.amount > 0
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {transaction.amount > 0 ? "+" : ""}₹
+                            {Math.abs(transaction.amount).toLocaleString()}
+                          </p>
+                          <Badge
+                            variant={
+                              transaction.status === "Completed"
+                                ? "default"
+                                : "secondary"
+                            }
+                          >
+                            {transaction.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="cashflow" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-green-600">Cash Inflow</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ₹{(mockFinanceData.cashFlow.inflow / 100000).toFixed(1)}L
+                </div>
+                <p className="text-xs text-muted-foreground">This month</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-red-600">Cash Outflow</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ₹{(mockFinanceData.cashFlow.outflow / 100000).toFixed(1)}L
+                </div>
+                <p className="text-xs text-muted-foreground">This month</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-blue-600">Net Cash Flow</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ₹{(mockFinanceData.cashFlow.netFlow / 100000).toFixed(1)}L
+                </div>
+                <p className="text-xs text-muted-foreground">This month</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Cash Flow Analysis</CardTitle>
+              <CardDescription>Monthly cash flow trend</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg">
+                <div className="text-center">
+                  <BarChart3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-sm text-gray-500">
+                    Cash Flow Chart Coming Soon
                   </p>
                 </div>
               </div>
-            ))}
-          </div>
-          <Button variant="outline" className="w-full mt-4">
-            View All Expenses
-          </Button>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* Party Account Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Party Account Summary</CardTitle>
-          <CardDescription>
-            Outstanding balances and credit limits
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {demoParties.map((party) => {
-              const utilizationPercent =
-                (party.currentBalance / party.creditLimit) * 100;
-              const isHighUtilization = utilizationPercent > 80;
+        <TabsContent value="expenses" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Expense Breakdown</CardTitle>
+                <CardDescription>
+                  Current month expense categories
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {mockFinanceData.expenseCategories.map((category, index) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>{category.name}</span>
+                        <span className="font-medium">
+                          ₹{(category.amount / 1000).toFixed(0)}K (
+                          {category.percentage}%)
+                        </span>
+                      </div>
+                      <Progress value={category.percentage} className="h-2" />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
 
-              return (
-                <div key={party.id} className="p-4 border rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium">{party.name}</h4>
-                    <Badge
-                      variant={isHighUtilization ? "destructive" : "secondary"}
-                    >
-                      {utilizationPercent.toFixed(0)}%
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Current Balance:</span>
-                      <span className="font-medium">
-                        {formatCurrency(party.currentBalance)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Credit Limit:</span>
-                      <span>{formatCurrency(party.creditLimit)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Available Credit:</span>
-                      <span className="font-medium text-green-600">
-                        {formatCurrency(
-                          party.creditLimit - party.currentBalance
-                        )}
-                      </span>
-                    </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Expense Trends</CardTitle>
+                <CardDescription>
+                  Category-wise expense analysis
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg">
+                  <div className="text-center">
+                    <PieChart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <p className="text-sm text-gray-500">
+                      Expense Pie Chart Coming Soon
+                    </p>
                   </div>
                 </div>
-              );
-            })}
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Frequently used finance functions</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-            <Button variant="outline" className="h-20 flex-col space-y-2">
-              <Plus className="h-6 w-6" />
-              <span className="text-xs">Create Invoice</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex-col space-y-2">
-              <DollarSign className="h-6 w-6" />
-              <span className="text-xs">Record Payment</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex-col space-y-2">
-              <TrendingDown className="h-6 w-6" />
-              <span className="text-xs">Add Expense</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex-col space-y-2">
-              <Download className="h-6 w-6" />
-              <span className="text-xs">Export Reports</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex-col space-y-2">
-              <Building className="h-6 w-6" />
-              <span className="text-xs">Party Accounts</span>
-            </Button>
+        <TabsContent value="targets" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Target className="h-5 w-5 mr-2" />
+                  Revenue Target
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex justify-between">
+                    <span>Target:</span>
+                    <span className="font-bold">
+                      ₹
+                      {(
+                        mockFinanceData.monthlyTargets.revenueTarget / 100000
+                      ).toFixed(1)}
+                      L
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Achieved:</span>
+                    <span className="font-bold">
+                      ₹
+                      {(
+                        mockFinanceData.monthlyTargets.currentRevenue / 100000
+                      ).toFixed(1)}
+                      L
+                    </span>
+                  </div>
+                  <Progress
+                    value={
+                      (mockFinanceData.monthlyTargets.currentRevenue /
+                        mockFinanceData.monthlyTargets.revenueTarget) *
+                      100
+                    }
+                    className="h-3"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    {(
+                      (mockFinanceData.monthlyTargets.currentRevenue /
+                        mockFinanceData.monthlyTargets.revenueTarget) *
+                      100
+                    ).toFixed(1)}
+                    % of target achieved
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Target className="h-5 w-5 mr-2" />
+                  Expense Target
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex justify-between">
+                    <span>Target:</span>
+                    <span className="font-bold">
+                      ₹
+                      {(
+                        mockFinanceData.monthlyTargets.expenseTarget / 100000
+                      ).toFixed(1)}
+                      L
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Current:</span>
+                    <span className="font-bold">
+                      ₹
+                      {(
+                        mockFinanceData.monthlyTargets.currentExpenses / 100000
+                      ).toFixed(1)}
+                      L
+                    </span>
+                  </div>
+                  <Progress
+                    value={
+                      (mockFinanceData.monthlyTargets.currentExpenses /
+                        mockFinanceData.monthlyTargets.expenseTarget) *
+                      100
+                    }
+                    className="h-3"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    {(
+                      (mockFinanceData.monthlyTargets.currentExpenses /
+                        mockFinanceData.monthlyTargets.expenseTarget) *
+                      100
+                    ).toFixed(1)}
+                    % of budget used
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Target className="h-5 w-5 mr-2" />
+                  Profit Target
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex justify-between">
+                    <span>Target:</span>
+                    <span className="font-bold">
+                      ₹
+                      {(
+                        mockFinanceData.monthlyTargets.profitTarget / 100000
+                      ).toFixed(1)}
+                      L
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Achieved:</span>
+                    <span className="font-bold">
+                      ₹
+                      {(
+                        mockFinanceData.monthlyTargets.currentProfit / 100000
+                      ).toFixed(1)}
+                      L
+                    </span>
+                  </div>
+                  <Progress
+                    value={
+                      (mockFinanceData.monthlyTargets.currentProfit /
+                        mockFinanceData.monthlyTargets.profitTarget) *
+                      100
+                    }
+                    className="h-3"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    {(
+                      (mockFinanceData.monthlyTargets.currentProfit /
+                        mockFinanceData.monthlyTargets.profitTarget) *
+                      100
+                    ).toFixed(1)}
+                    % of target achieved
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Monthly Performance</CardTitle>
+              <CardDescription>
+                Target vs actual performance visualization
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg">
+                <div className="text-center">
+                  <Target className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-sm text-gray-500">
+                    Performance Chart Coming Soon
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
-};
-
-export default FinanceDashboard;
+}

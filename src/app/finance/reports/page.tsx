@@ -1,15 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -26,745 +21,791 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
+import { Label } from "@/components/ui/label";
 import {
-  DollarSign,
+  BarChart3,
+  LineChart,
+  PieChart,
   TrendingUp,
   TrendingDown,
-  FileText,
   Download,
   Calendar,
-  BarChart3,
-  PieChart,
-  CreditCard,
-  Building2,
-  Users,
-  Target,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  ArrowUpRight,
-  ArrowDownRight,
+  FileText,
+  DollarSign,
+  Calculator,
+  RefreshCw,
   Filter,
+  Eye,
+  Building2,
+  CreditCard,
+  Target,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react";
-import DashboardPageLayout from "@/components/layout/DashboardPageLayout";
+import { useAuth } from "@/contexts/AuthContext";
 import { RoleBasedAccess } from "@/components/auth/RoleBasedAccess";
-import { demoTransactions, demoParties, demoJobSheets } from "@/data/demo-data";
+import DashboardPageLayout from "@/components/layout/DashboardPageLayout";
+import DatabaseConnectionStatus from "@/components/DatabaseConnectionStatus";
 
-function FinanceReportsPageContent() {
+interface FinancialReport {
+  period: string;
+  revenue: number;
+  expenses: number;
+  netIncome: number;
+  assets: number;
+  liabilities: number;
+  equity: number;
+  cashFlow: number;
+  operatingCashFlow: number;
+  investingCashFlow: number;
+  financingCashFlow: number;
+}
+
+interface ProfitLossData {
+  category: string;
+  current_period: number;
+  previous_period: number;
+  variance: number;
+  variance_percent: number;
+}
+
+interface BalanceSheetData {
+  account_type: string;
+  account_name: string;
+  current_balance: number;
+  previous_balance: number;
+  change: number;
+}
+
+interface CashFlowData {
+  category: string;
+  inflow: number;
+  outflow: number;
+  net_flow: number;
+}
+
+interface ReportSummary {
+  totalRevenue: number;
+  totalExpenses: number;
+  netProfit: number;
+  profitMargin: number;
+  totalAssets: number;
+  totalLiabilities: number;
+  totalEquity: number;
+  currentRatio: number;
+}
+
+function FinancialReportsPageContent() {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("overview");
   const [dateRange, setDateRange] = useState("month");
-  const [reportType, setReportType] = useState("overview");
+  const [startDate, setStartDate] = useState(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+      .toISOString()
+      .split("T")[0]
+  );
+  const [endDate, setEndDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
 
-  // Calculate financial metrics
-  const totalRevenue = demoTransactions
-    .filter((t) => ["invoice", "payment"].includes(t.type))
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Report Data
+  const [summary, setSummary] = useState<ReportSummary | null>(null);
+  const [profitLossData, setProfitLossData] = useState<ProfitLossData[]>([]);
+  const [balanceSheetData, setBalanceSheetData] = useState<BalanceSheetData[]>(
+    []
+  );
+  const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
 
-  const totalExpenses = demoTransactions
-    .filter((t) => ["debit"].includes(t.type))
-    .reduce((sum, t) => sum + t.amount, 0);
+  useEffect(() => {
+    fetchReports();
+  }, [dateRange, startDate, endDate]);
 
-  const netProfit = totalRevenue - totalExpenses;
-  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({
+        start_date: startDate,
+        end_date: endDate,
+        period: dateRange,
+      });
 
-  const pendingInvoices = demoTransactions
-    .filter((t) => t.type === "invoice" && t.status === "pending")
-    .reduce((sum, t) => sum + t.amount, 0);
+      const response = await fetch(`/api/finance/reports?${params}`);
+      const data = await response.json();
 
-  const overdueAmount = demoTransactions
-    .filter((t) => t.status === "overdue")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const cashFlow =
-    demoTransactions
-      .filter((t) => t.type === "payment")
-      .reduce((sum, t) => sum + t.amount, 0) - totalExpenses;
-
-  // Monthly revenue data
-  const monthlyData = Array.from({ length: 12 }, (_, i) => {
-    const month = new Date(2024, i, 1).toLocaleDateString("en-US", {
-      month: "short",
-    });
-    const revenue = Math.floor(Math.random() * 500000) + 200000;
-    const expenses = Math.floor(Math.random() * 300000) + 100000;
-    return { month, revenue, expenses, profit: revenue - expenses };
-  });
-
-  // Top customers by revenue
-  const customerRevenue = demoParties
-    .map((party) => {
-      const jobs = demoJobSheets.filter((job) => job.partyId === party.id);
-      const revenue = jobs.reduce(
-        (sum, job) => sum + (job.sellingPrice || 0),
-        0
-      );
-      return { ...party, revenue, jobCount: jobs.length };
-    })
-    .sort((a, b) => b.revenue - a.revenue);
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      paid: { color: "bg-green-100 text-green-800", label: "Paid" },
-      pending: { color: "bg-yellow-100 text-yellow-800", label: "Pending" },
-      overdue: { color: "bg-red-100 text-red-800", label: "Overdue" },
-      cancelled: { color: "bg-gray-100 text-gray-800", label: "Cancelled" },
-    };
-    const config = statusConfig[status as keyof typeof statusConfig] || {
-      color: "bg-gray-100 text-gray-800",
-      label: status,
-    };
-    return <Badge className={config.color}>{config.label}</Badge>;
+      if (response.ok) {
+        setSummary(data.summary);
+        setProfitLossData(data.profitLoss || []);
+        setBalanceSheetData(data.balanceSheet || []);
+        setCashFlowData(data.cashFlow || []);
+        setChartData(data.chartData || []);
+      } else {
+        console.error("Failed to fetch reports:", data.error);
+      }
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const handleDateRangeChange = (range: string) => {
+    setDateRange(range);
+    const now = new Date();
+
+    switch (range) {
+      case "week":
+        const weekStart = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 7
+        );
+        setStartDate(weekStart.toISOString().split("T")[0]);
+        break;
+      case "month":
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        setStartDate(monthStart.toISOString().split("T")[0]);
+        break;
+      case "quarter":
+        const quarter = Math.floor(now.getMonth() / 3);
+        const quarterStart = new Date(now.getFullYear(), quarter * 3, 1);
+        setStartDate(quarterStart.toISOString().split("T")[0]);
+        break;
+      case "year":
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+        setStartDate(yearStart.toISOString().split("T")[0]);
+        break;
+    }
+    setEndDate(now.toISOString().split("T")[0]);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return `₹${Math.abs(amount).toLocaleString()}`;
+  };
+
+  const formatPercentage = (percent: number) => {
+    return `${percent.toFixed(1)}%`;
+  };
+
+  const getVarianceColor = (variance: number) => {
+    if (variance > 0) return "text-green-600";
+    if (variance < 0) return "text-red-600";
+    return "text-gray-600";
+  };
+
+  const getVarianceIcon = (variance: number) => {
+    if (variance > 0) return <TrendingUp className="h-4 w-4 text-green-600" />;
+    if (variance < 0) return <TrendingDown className="h-4 w-4 text-red-600" />;
+    return <div className="h-4 w-4" />;
+  };
+
+  const StatCard = ({
+    title,
+    value,
+    subtitle,
+    icon: Icon,
+    color,
+    trend,
+  }: any) => (
+    <Card className="shadow-md hover:shadow-lg transition-shadow">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-600">{title}</p>
+            <p className={`text-2xl font-bold ${color}`}>{value}</p>
+            {subtitle && (
+              <div className="flex items-center gap-2 mt-1">
+                {trend?.icon && trend.icon}
+                <p className={`text-xs ${trend?.color || "text-gray-500"}`}>
+                  {subtitle}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className={`bg-${color.split("-")[1]}-100 p-3 rounded-full`}>
+            <Icon className={`h-6 w-6 ${color}`} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-500" />
+            <p className="text-gray-500">Generating reports...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 space-y-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Financial Reports & Analytics
+          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+            Financial Reports
           </h1>
-          <p className="text-gray-600">
-            Comprehensive financial insights and performance metrics
+          <p className="text-gray-600 mt-2">
+            Comprehensive financial analysis and reporting
           </p>
+          <div className="mt-2">
+            <DatabaseConnectionStatus variant="compact" />
+          </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="week">This Week</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="quarter">This Quarter</SelectItem>
-              <SelectItem value="year">This Year</SelectItem>
-              <SelectItem value="custom">Custom Range</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export Report
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={fetchReports}
+            className="bg-white shadow-md"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
           </Button>
-          <Button>
-            <FileText className="w-4 h-4 mr-2" />
-            Generate Report
+          <Button className="bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-lg">
+            <Download className="h-4 w-4 mr-2" />
+            Export Reports
           </Button>
         </div>
       </div>
 
-      {/* Key Financial Metrics */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Total Revenue
-                </p>
-                <p className="text-3xl font-bold">
-                  ₹{(totalRevenue / 100000).toFixed(1)}L
-                </p>
-                <p className="text-xs text-green-600 flex items-center mt-1">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +12% from last month
-                </p>
-              </div>
-              <DollarSign className="w-8 h-8 text-green-500" />
+      {/* Date Range Selector */}
+      <Card className="shadow-md">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Report Period
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+              <Label>Quick Select</Label>
+              <Select value={dateRange} onValueChange={handleDateRangeChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="quarter">This Quarter</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
+                  <SelectItem value="custom">Custom Range</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Net Profit</p>
-                <p className="text-3xl font-bold">
-                  ₹{(netProfit / 100000).toFixed(1)}L
-                </p>
-                <p className="text-xs text-green-600 flex items-center mt-1">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +8% from last month
-                </p>
-              </div>
-              <BarChart3 className="w-8 h-8 text-blue-500" />
+            <div>
+              <Label>Start Date</Label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Profit Margin
-                </p>
-                <p className="text-3xl font-bold">{profitMargin.toFixed(1)}%</p>
-                <p className="text-xs text-orange-600 flex items-center mt-1">
-                  <TrendingDown className="w-3 h-3 mr-1" />
-                  -2% from last month
-                </p>
-              </div>
-              <Target className="w-8 h-8 text-purple-500" />
+            <div>
+              <Label>End Date</Label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Cash Flow</p>
-                <p className="text-3xl font-bold">
-                  ₹{(cashFlow / 100000).toFixed(1)}L
-                </p>
-                <p className="text-xs text-green-600 flex items-center mt-1">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +15% from last month
-                </p>
-              </div>
-              <CreditCard className="w-8 h-8 text-orange-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Button
+              onClick={fetchReports}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Generate Report
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="revenue">Revenue Analysis</TabsTrigger>
-          <TabsTrigger value="expenses">Expense Analysis</TabsTrigger>
-          <TabsTrigger value="cashflow">Cash Flow</TabsTrigger>
-          <TabsTrigger value="customers">Customer Analytics</TabsTrigger>
-        </TabsList>
+      {/* Key Metrics Overview */}
+      {summary && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            title="Total Revenue"
+            value={formatCurrency(summary.totalRevenue)}
+            icon={DollarSign}
+            color="text-green-600"
+            subtitle={`Margin: ${formatPercentage(summary.profitMargin)}`}
+          />
+          <StatCard
+            title="Total Expenses"
+            value={formatCurrency(summary.totalExpenses)}
+            icon={CreditCard}
+            color="text-red-600"
+            subtitle="Operating costs"
+          />
+          <StatCard
+            title="Net Profit"
+            value={formatCurrency(summary.netProfit)}
+            icon={TrendingUp}
+            color={summary.netProfit >= 0 ? "text-green-600" : "text-red-600"}
+            trend={{
+              icon:
+                summary.netProfit >= 0 ? (
+                  <TrendingUp className="h-3 w-3" />
+                ) : (
+                  <TrendingDown className="h-3 w-3" />
+                ),
+              color: summary.netProfit >= 0 ? "text-green-500" : "text-red-500",
+            }}
+            subtitle={`${formatPercentage(summary.profitMargin)} margin`}
+          />
+          <StatCard
+            title="Current Ratio"
+            value={summary.currentRatio?.toFixed(2) || "0.00"}
+            icon={Target}
+            color="text-blue-600"
+            subtitle="Liquidity measure"
+          />
+        </div>
+      )}
 
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Revenue vs Expenses Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Revenue vs Expenses (Monthly)</CardTitle>
-                <CardDescription>
-                  Monthly comparison of revenue and expenses
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {monthlyData.slice(0, 6).map((data, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">
-                          {data.month}
-                        </span>
-                        <div className="flex space-x-4 text-sm">
-                          <span className="text-green-600">
-                            ₹{(data.revenue / 1000).toFixed(0)}K
-                          </span>
-                          <span className="text-red-600">
-                            ₹{(data.expenses / 1000).toFixed(0)}K
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex space-x-2">
-                        <Progress
-                          value={(data.revenue / 500000) * 100}
-                          className="h-2 flex-1"
-                        />
-                        <Progress
-                          value={(data.expenses / 500000) * 100}
-                          className="h-2 flex-1"
-                        />
+      {/* Financial Reports Tabs */}
+      <Card className="shadow-md">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Financial Statements
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="space-y-6"
+          >
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="profit-loss">Profit & Loss</TabsTrigger>
+              <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
+              <TabsTrigger value="cash-flow">Cash Flow</TabsTrigger>
+            </TabsList>
+
+            {/* Overview Tab */}
+            <TabsContent value="overview" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Revenue vs Expenses Chart Placeholder */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <LineChart className="h-5 w-5" />
+                      Revenue vs Expenses Trend
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center">
+                      <div className="text-center text-gray-500">
+                        <BarChart3 className="h-12 w-12 mx-auto mb-2" />
+                        <p>Interactive chart will render here</p>
+                        <p className="text-sm">Revenue vs Expenses over time</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
 
-            {/* Outstanding Payments */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Outstanding Payments</CardTitle>
-                <CardDescription>
-                  Pending and overdue invoice amounts
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg">
-                    <div className="flex items-center">
-                      <Clock className="w-8 h-8 text-yellow-600 mr-3" />
+                {/* Expense Breakdown Chart Placeholder */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <PieChart className="h-5 w-5" />
+                      Expense Breakdown
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center">
+                      <div className="text-center text-gray-500">
+                        <PieChart className="h-12 w-12 mx-auto mb-2" />
+                        <p>Pie chart will render here</p>
+                        <p className="text-sm">Expenses by category</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Quick Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="bg-green-50 border-green-200">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">Pending Invoices</p>
-                        <p className="text-sm text-gray-600">
-                          Awaiting payment
+                        <p className="text-sm font-medium text-green-600">
+                          Assets
+                        </p>
+                        <p className="text-2xl font-bold text-green-700">
+                          {formatCurrency(summary?.totalAssets || 0)}
                         </p>
                       </div>
+                      <Building2 className="h-8 w-8 text-green-600" />
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-yellow-600">
-                        ₹{(pendingInvoices / 100000).toFixed(1)}L
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {
-                          demoTransactions.filter(
-                            (t) =>
-                              t.type === "invoice" && t.status === "pending"
-                          ).length
-                        }{" "}
-                        invoices
-                      </p>
-                    </div>
-                  </div>
+                  </CardContent>
+                </Card>
 
-                  <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg">
-                    <div className="flex items-center">
-                      <AlertTriangle className="w-8 h-8 text-red-600 mr-3" />
+                <Card className="bg-red-50 border-red-200">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">Overdue Amount</p>
-                        <p className="text-sm text-gray-600">Past due date</p>
+                        <p className="text-sm font-medium text-red-600">
+                          Liabilities
+                        </p>
+                        <p className="text-2xl font-bold text-red-700">
+                          {formatCurrency(summary?.totalLiabilities || 0)}
+                        </p>
                       </div>
+                      <CreditCard className="h-8 w-8 text-red-600" />
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-red-600">
-                        ₹{(overdueAmount / 100000).toFixed(1)}L
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {
-                          demoTransactions.filter((t) => t.status === "overdue")
-                            .length
-                        }{" "}
-                        overdue
-                      </p>
-                    </div>
-                  </div>
+                  </CardContent>
+                </Card>
 
-                  <div className="pt-4 border-t">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium">
-                        Collection Rate
-                      </span>
-                      <span className="text-sm font-medium">87%</span>
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-blue-600">
+                          Equity
+                        </p>
+                        <p className="text-2xl font-bold text-blue-700">
+                          {formatCurrency(summary?.totalEquity || 0)}
+                        </p>
+                      </div>
+                      <Target className="h-8 w-8 text-blue-600" />
                     </div>
-                    <Progress value={87} className="h-2" />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Target: 90% collection rate
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
 
-          {/* Recent Transactions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Financial Transactions</CardTitle>
-              <CardDescription>
-                Latest financial activities and transactions
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Transaction</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {demoTransactions.slice(0, 10).map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">
-                            {transaction.description}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {transaction.referenceNumber}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {transaction.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={
-                            ["payment", "credit"].includes(transaction.type)
-                              ? "text-green-600 font-medium"
-                              : "text-red-600 font-medium"
-                          }
-                        >
-                          {["payment", "credit"].includes(transaction.type)
-                            ? "+"
-                            : "-"}
-                          ₹{transaction.amount.toLocaleString()}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(
-                          transaction.transactionDate
-                        ).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(transaction.status)}
-                      </TableCell>
+            {/* Profit & Loss Tab */}
+            <TabsContent value="profit-loss" className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">
+                  Profit & Loss Statement
+                </h3>
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export P&L
+                </Button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">
+                        Current Period
+                      </TableHead>
+                      <TableHead className="text-right">
+                        Previous Period
+                      </TableHead>
+                      <TableHead className="text-right">Variance</TableHead>
+                      <TableHead className="text-right">% Change</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="revenue" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Revenue Breakdown</CardTitle>
-                <CardDescription>
-                  Revenue analysis by different categories
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">Printing Services</span>
-                    <span className="font-medium">
-                      ₹{((totalRevenue * 0.6) / 100000).toFixed(1)}L
-                    </span>
-                  </div>
-                  <Progress value={60} className="h-2" />
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">Design Services</span>
-                    <span className="font-medium">
-                      ₹{((totalRevenue * 0.25) / 100000).toFixed(1)}L
-                    </span>
-                  </div>
-                  <Progress value={25} className="h-2" />
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">Additional Services</span>
-                    <span className="font-medium">
-                      ₹{((totalRevenue * 0.15) / 100000).toFixed(1)}L
-                    </span>
-                  </div>
-                  <Progress value={15} className="h-2" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Revenue Customers</CardTitle>
-                <CardDescription>
-                  Highest revenue generating customers
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {customerRevenue.slice(0, 5).map((customer, index) => (
-                    <div
-                      key={customer.id}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-medium text-blue-600">
-                            {index + 1}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="font-medium">{customer.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {customer.jobCount} orders
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">
-                          ₹{(customer.revenue / 1000).toFixed(0)}K
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {((customer.revenue / totalRevenue) * 100).toFixed(1)}
-                          %
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="expenses" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Expense Analysis</CardTitle>
-              <CardDescription>
-                Detailed breakdown of business expenses
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Major Expense Categories</h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-sm">Raw Materials</span>
-                        <span className="font-medium">
-                          ₹{((totalExpenses * 0.4) / 1000).toFixed(0)}K
-                        </span>
-                      </div>
-                      <Progress value={40} className="h-2" />
-
-                      <div className="flex justify-between">
-                        <span className="text-sm">Salaries & Benefits</span>
-                        <span className="font-medium">
-                          ₹{((totalExpenses * 0.3) / 1000).toFixed(0)}K
-                        </span>
-                      </div>
-                      <Progress value={30} className="h-2" />
-
-                      <div className="flex justify-between">
-                        <span className="text-sm">Utilities</span>
-                        <span className="font-medium">
-                          ₹{((totalExpenses * 0.15) / 1000).toFixed(0)}K
-                        </span>
-                      </div>
-                      <Progress value={15} className="h-2" />
-
-                      <div className="flex justify-between">
-                        <span className="text-sm">Maintenance</span>
-                        <span className="font-medium">
-                          ₹{((totalExpenses * 0.15) / 1000).toFixed(0)}K
-                        </span>
-                      </div>
-                      <Progress value={15} className="h-2" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Expense Trends</h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                        <span className="text-sm">This Month</span>
-                        <span className="font-medium">
-                          ₹{(totalExpenses / 1000).toFixed(0)}K
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                        <span className="text-sm">Last Month</span>
-                        <span className="font-medium">
-                          ₹{((totalExpenses * 0.9) / 1000).toFixed(0)}K
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center p-3 bg-green-50 rounded">
-                        <span className="text-sm text-green-600">Savings</span>
-                        <span className="font-medium text-green-600">
-                          ₹{((totalExpenses * 0.1) / 1000).toFixed(0)}K
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="cashflow" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Cash Flow Statement</CardTitle>
-              <CardDescription>
-                Detailed cash flow analysis and projections
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="p-4 bg-green-50 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <ArrowDownRight className="w-8 h-8 text-green-600" />
-                      <div className="text-right">
-                        <p className="text-sm text-gray-600">Cash Inflow</p>
-                        <p className="text-2xl font-bold text-green-600">
-                          ₹{(totalRevenue / 100000).toFixed(1)}L
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-red-50 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <ArrowUpRight className="w-8 h-8 text-red-600" />
-                      <div className="text-right">
-                        <p className="text-sm text-gray-600">Cash Outflow</p>
-                        <p className="text-2xl font-bold text-red-600">
-                          ₹{(totalExpenses / 100000).toFixed(1)}L
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <DollarSign className="w-8 h-8 text-blue-600" />
-                      <div className="text-right">
-                        <p className="text-sm text-gray-600">Net Cash Flow</p>
-                        <p className="text-2xl font-bold text-blue-600">
-                          ₹{(cashFlow / 100000).toFixed(1)}L
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h4 className="font-medium">
-                    Cash Flow Forecast (Next 6 Months)
-                  </h4>
-                  <div className="space-y-3">
-                    {Array.from({ length: 6 }, (_, i) => {
-                      const month = new Date(
-                        2024,
-                        new Date().getMonth() + i + 1,
-                        1
-                      ).toLocaleDateString("en-US", {
-                        month: "short",
-                        year: "numeric",
-                      });
-                      const projected =
-                        cashFlow * (1 + (Math.random() * 0.2 - 0.1));
-                      return (
-                        <div
-                          key={i}
-                          className="flex justify-between items-center p-3 border rounded"
+                  </TableHeader>
+                  <TableBody>
+                    {profitLossData.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">
+                          {item.category}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {formatCurrency(item.current_period)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {formatCurrency(item.previous_period)}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-mono ${getVarianceColor(item.variance)}`}
                         >
-                          <span className="font-medium">{month}</span>
-                          <span
-                            className={`font-medium ${projected > 0 ? "text-green-600" : "text-red-600"}`}
-                          >
-                            ₹{(projected / 100000).toFixed(1)}L
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                          <div className="flex items-center justify-end gap-2">
+                            {getVarianceIcon(item.variance)}
+                            {formatCurrency(item.variance)}
+                          </div>
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-mono ${getVarianceColor(item.variance_percent)}`}
+                        >
+                          {formatPercentage(item.variance_percent)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        <TabsContent value="customers" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer Revenue Analysis</CardTitle>
-                <CardDescription>
-                  Revenue contribution by customer segments
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {customerRevenue.slice(0, 8).map((customer, index) => (
-                    <div
-                      key={customer.id}
-                      className="flex items-center justify-between p-3 border rounded"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <span className="text-sm font-medium text-gray-500">
-                          #{index + 1}
-                        </span>
-                        <div>
-                          <p className="font-medium">{customer.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {customer.jobCount} orders • {customer.tier} tier
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">
-                          ₹{(customer.revenue / 1000).toFixed(0)}K
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {((customer.revenue / totalRevenue) * 100).toFixed(1)}
-                          %
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+              {profitLossData.length === 0 && (
+                <div className="text-center py-8">
+                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No P&L Data Available
+                  </h3>
+                  <p className="text-gray-600">
+                    Generate transactions to see profit & loss analysis.
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </TabsContent>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Behavior Analysis</CardTitle>
-                <CardDescription>
-                  Customer payment patterns and trends
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div className="grid gap-4 grid-cols-2">
-                    <div className="text-center p-4 bg-green-50 rounded">
-                      <p className="text-sm text-gray-600">On-time Payments</p>
-                      <p className="text-2xl font-bold text-green-600">87%</p>
-                    </div>
-                    <div className="text-center p-4 bg-red-50 rounded">
-                      <p className="text-sm text-gray-600">Late Payments</p>
-                      <p className="text-2xl font-bold text-red-600">13%</p>
+            {/* Balance Sheet Tab */}
+            <TabsContent value="balance-sheet" className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Balance Sheet</h3>
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Balance Sheet
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Assets */}
+                <Card>
+                  <CardHeader className="bg-green-50">
+                    <CardTitle className="text-green-700">Assets</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableBody>
+                        {balanceSheetData
+                          .filter((item) => item.account_type === "ASSET")
+                          .map((item, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">
+                                {item.account_name}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(item.current_balance)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                {/* Liabilities */}
+                <Card>
+                  <CardHeader className="bg-red-50">
+                    <CardTitle className="text-red-700">Liabilities</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableBody>
+                        {balanceSheetData
+                          .filter((item) => item.account_type === "LIABILITY")
+                          .map((item, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">
+                                {item.account_name}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(item.current_balance)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                {/* Equity */}
+                <Card>
+                  <CardHeader className="bg-blue-50">
+                    <CardTitle className="text-blue-700">Equity</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableBody>
+                        {balanceSheetData
+                          .filter((item) => item.account_type === "EQUITY")
+                          .map((item, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">
+                                {item.account_name}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(item.current_balance)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Balance Verification */}
+              <Card className="bg-gray-50">
+                <CardContent className="p-6">
+                  <div className="text-center">
+                    <h4 className="font-semibold mb-2">
+                      Balance Sheet Verification
+                    </h4>
+                    <div className="flex justify-center items-center gap-4">
+                      <span>
+                        Assets: {formatCurrency(summary?.totalAssets || 0)}
+                      </span>
+                      <span>=</span>
+                      <span>
+                        Liabilities:{" "}
+                        {formatCurrency(summary?.totalLiabilities || 0)}
+                      </span>
+                      <span>+</span>
+                      <span>
+                        Equity: {formatCurrency(summary?.totalEquity || 0)}
+                      </span>
+                      {Math.abs(
+                        (summary?.totalAssets || 0) -
+                          (summary?.totalLiabilities || 0) -
+                          (summary?.totalEquity || 0)
+                      ) < 1 ? (
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-red-600" />
+                      )}
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-                  <div className="space-y-3">
-                    <h4 className="font-medium">Payment Terms Distribution</h4>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-sm">Immediate (0 days)</span>
-                        <span className="text-sm font-medium">25%</span>
-                      </div>
-                      <Progress value={25} className="h-2" />
+            {/* Cash Flow Tab */}
+            <TabsContent value="cash-flow" className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Cash Flow Statement</h3>
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Cash Flow
+                </Button>
+              </div>
 
-                      <div className="flex justify-between">
-                        <span className="text-sm">Net 15 days</span>
-                        <span className="text-sm font-medium">35%</span>
-                      </div>
-                      <Progress value={35} className="h-2" />
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">Cash Inflow</TableHead>
+                      <TableHead className="text-right">Cash Outflow</TableHead>
+                      <TableHead className="text-right">
+                        Net Cash Flow
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cashFlowData.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">
+                          {item.category}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-green-600">
+                          {formatCurrency(item.inflow)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-red-600">
+                          {formatCurrency(item.outflow)}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-mono font-bold ${
+                            item.net_flow >= 0
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {item.net_flow >= 0 ? "+" : "-"}
+                          {formatCurrency(item.net_flow)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
 
-                      <div className="flex justify-between">
-                        <span className="text-sm">Net 30 days</span>
-                        <span className="text-sm font-medium">40%</span>
-                      </div>
-                      <Progress value={40} className="h-2" />
+              {/* Cash Flow Chart Placeholder */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <LineChart className="h-5 w-5" />
+                    Cash Flow Trend
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center">
+                    <div className="text-center text-gray-500">
+                      <LineChart className="h-12 w-12 mx-auto mb-2" />
+                      <p>Cash flow chart will render here</p>
+                      <p className="text-sm">
+                        Operating, Investing, and Financing activities
+                      </p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {cashFlowData.length === 0 && (
+                <div className="text-center py-8">
+                  <Calculator className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No Cash Flow Data Available
+                  </h3>
+                  <p className="text-gray-600">
+                    Record payments to see cash flow analysis.
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Export Options */}
+      <Card className="shadow-md">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Download className="h-5 w-5" />
+            Export Options
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Button variant="outline" className="justify-start">
+              <FileText className="h-4 w-4 mr-2" />
+              Export to PDF
+            </Button>
+            <Button variant="outline" className="justify-start">
+              <FileText className="h-4 w-4 mr-2" />
+              Export to Excel
+            </Button>
+            <Button variant="outline" className="justify-start">
+              <Eye className="h-4 w-4 mr-2" />
+              Print Report
+            </Button>
+            <Button variant="outline" className="justify-start">
+              <Calendar className="h-4 w-4 mr-2" />
+              Schedule Email
+            </Button>
           </div>
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-export default function FinanceReportsPage() {
+export default function FinancialReportsPage() {
   return (
     <DashboardPageLayout>
       <RoleBasedAccess allowedRoles={["admin", "finance"]}>
-        <FinanceReportsPageContent />
+        <FinancialReportsPageContent />
       </RoleBasedAccess>
     </DashboardPageLayout>
   );

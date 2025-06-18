@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Plus,
   Search,
@@ -18,6 +18,13 @@ import {
   Building,
   ArrowUpRight,
   ArrowDownRight,
+  Check,
+  X,
+  MoreHorizontal,
+  Receipt,
+  Target,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import {
   Card,
@@ -45,6 +52,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   demoTransactions,
   getPartyById,
   getJobSheetById,
@@ -52,473 +73,572 @@ import {
 } from "@/data/demo-data";
 import DashboardPageLayout from "@/components/layout/DashboardPageLayout";
 import { RoleBasedAccess } from "@/components/auth/RoleBasedAccess";
+import { useAuth } from "@/contexts/AuthContext";
+import DatabaseConnectionStatus from "@/components/DatabaseConnectionStatus";
+
+interface Transaction {
+  id: string;
+  transaction_number: string;
+  transaction_date: string;
+  reference_type: string;
+  reference_id?: string;
+  party_id?: string;
+  description: string;
+  total_amount: number;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  created_at: string;
+  parties?: {
+    name: string;
+    email: string;
+  };
+  users?: {
+    email: string;
+    full_name: string;
+  };
+}
+
+interface TransactionSummary {
+  totalTransactions: number;
+  totalAmount: number;
+  pending: number;
+  approved: number;
+  byType: {
+    jobSheet: number;
+    invoice: number;
+    payment: number;
+    expense: number;
+  };
+}
 
 const TransactionsPageContent = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [summary, setSummary] = useState<TransactionSummary | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [dateRange, setDateRange] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [dateRange, setDateRange] = useState("month");
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<Transaction | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
-  const filteredTransactions = demoTransactions.filter((transaction) => {
-    const party = getPartyById(transaction.partyId);
-    const job = getJobSheetById(transaction.jobId || "");
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 20;
 
-    const matchesSearch =
-      transaction.description
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      transaction.referenceNumber
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      party?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job?.title.toLowerCase().includes(searchTerm.toLowerCase());
+  useEffect(() => {
+    fetchTransactions();
+  }, [currentPage, statusFilter, typeFilter, dateRange]);
 
-    const matchesType = typeFilter === "all" || transaction.type === typeFilter;
-    const matchesStatus =
-      statusFilter === "all" || transaction.status === statusFilter;
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true);
 
-    // Date filtering logic would go here
-    const matchesDate = true; // Simplified for demo
+      let startDate = "";
+      const endDate = new Date().toISOString().split("T")[0];
 
-    return matchesSearch && matchesType && matchesStatus && matchesDate;
-  });
+      switch (dateRange) {
+        case "week":
+          startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split("T")[0];
+          break;
+        case "month":
+          startDate = new Date(
+            new Date().getFullYear(),
+            new Date().getMonth(),
+            1
+          )
+            .toISOString()
+            .split("T")[0];
+          break;
+        case "quarter":
+          const quarterStart = new Date(
+            new Date().getFullYear(),
+            Math.floor(new Date().getMonth() / 3) * 3,
+            1
+          );
+          startDate = quarterStart.toISOString().split("T")[0];
+          break;
+        case "year":
+          startDate = new Date(new Date().getFullYear(), 0, 1)
+            .toISOString()
+            .split("T")[0];
+          break;
+      }
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case "invoice":
-        return <FileText className="w-4 h-4" />;
-      case "payment":
-        return <DollarSign className="w-4 h-4" />;
-      case "credit":
-        return <TrendingUp className="w-4 h-4" />;
-      case "debit":
-        return <TrendingDown className="w-4 h-4" />;
-      default:
-        return <CreditCard className="w-4 h-4" />;
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: itemsPerPage.toString(),
+        ...(statusFilter !== "all" && { status: statusFilter }),
+        ...(typeFilter !== "all" && { type: typeFilter }),
+        ...(startDate && { startDate }),
+        endDate,
+      });
+
+      const response = await fetch(`/api/finance/transactions?${params}`);
+      const data = await response.json();
+
+      if (response.ok) {
+        setTransactions(data.transactions);
+        setSummary(data.summary);
+        setTotalPages(data.pagination.totalPages);
+      } else {
+        console.error("Failed to fetch transactions:", data.error);
+      }
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getTypeBadge = (type: string) => {
-    const typeConfig = {
-      invoice: { color: "bg-blue-100 text-blue-800", label: "Invoice" },
-      payment: { color: "bg-green-100 text-green-800", label: "Payment" },
-      credit: { color: "bg-emerald-100 text-emerald-800", label: "Credit" },
-      debit: { color: "bg-red-100 text-red-800", label: "Debit" },
-    };
+  const handleStatusUpdate = async (
+    transactionId: string,
+    newStatus: string
+  ) => {
+    try {
+      const response = await fetch("/api/finance/transactions", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: transactionId,
+          status: newStatus,
+        }),
+      });
 
-    const config = typeConfig[type as keyof typeof typeConfig] || {
-      color: "bg-gray-100 text-gray-800",
-      label: "Other",
-    };
+      if (response.ok) {
+        fetchTransactions();
+      }
+    } catch (error) {
+      console.error("Error updating transaction status:", error);
+    }
+  };
 
+  const formatCurrency = (amount: number) => {
+    return `₹${Math.abs(amount).toLocaleString()}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-IN");
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "APPROVED":
+        return "bg-green-100 text-green-800";
+      case "PENDING":
+        return "bg-yellow-100 text-yellow-800";
+      case "REJECTED":
+        return "bg-red-100 text-red-800";
+      case "CANCELLED":
+        return "bg-gray-100 text-gray-800";
+      default:
+        return "bg-blue-100 text-blue-800";
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case "JOB_SHEET":
+        return <FileText className="h-4 w-4" />;
+      case "INVOICE":
+        return <Receipt className="h-4 w-4" />;
+      case "PAYMENT":
+        return <CreditCard className="h-4 w-4" />;
+      case "EXPENSE":
+        return <Target className="h-4 w-4" />;
+      default:
+        return <DollarSign className="h-4 w-4" />;
+    }
+  };
+
+  const getAmountColor = (amount: number) => {
+    return amount >= 0 ? "text-green-600" : "text-red-600";
+  };
+
+  const filteredTransactions = transactions.filter(
+    (transaction) =>
+      transaction.description
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      transaction.transaction_number
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      transaction.parties?.name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase())
+  );
+
+  const StatCard = ({ title, value, icon: Icon, color, trend }: any) => (
+    <Card className="shadow-md hover:shadow-lg transition-shadow">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-600">{title}</p>
+            <p className={`text-2xl font-bold ${color}`}>{value}</p>
+          </div>
+          <div className={`bg-${color.split("-")[1]}-100 p-3 rounded-full`}>
+            <Icon className={`h-6 w-6 ${color}`} />
+          </div>
+        </div>
+        {trend && (
+          <div className="mt-4 flex items-center">
+            <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+            <span className="text-sm text-green-600">{trend}</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  if (loading) {
     return (
-      <Badge className={config.color}>
-        {getTypeIcon(type)}
-        <span className="ml-1">{config.label}</span>
-      </Badge>
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-500" />
+            <p className="text-gray-500">Loading transactions...</p>
+          </div>
+        </div>
+      </div>
     );
-  };
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending: { color: "bg-yellow-100 text-yellow-800", label: "Pending" },
-      paid: { color: "bg-green-100 text-green-800", label: "Paid" },
-      overdue: { color: "bg-red-100 text-red-800", label: "Overdue" },
-      cancelled: { color: "bg-gray-100 text-gray-800", label: "Cancelled" },
-    };
-
-    const config = statusConfig[status as keyof typeof statusConfig] || {
-      color: "bg-gray-100 text-gray-800",
-      label: status,
-    };
-
-    return <Badge className={config.color}>{config.label}</Badge>;
-  };
-
-  const formatCurrency = (amount: number) => `₹${amount.toLocaleString()}`;
-
-  const isCredit = (type: string) => ["payment", "credit"].includes(type);
-
-  const TransactionCard = ({ transaction }: { transaction: Transaction }) => {
-    const party = getPartyById(transaction.partyId);
-    const job = getJobSheetById(transaction.jobId || "");
-    const credit = isCredit(transaction.type);
-
-    return (
-      <Card className="mb-4">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg flex items-center">
-                <div
-                  className={`p-2 rounded-lg mr-3 ${credit ? "bg-green-100" : "bg-blue-100"}`}
-                >
-                  {credit ? (
-                    <ArrowDownRight className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <ArrowUpRight className="w-5 h-5 text-blue-600" />
-                  )}
-                </div>
-                {transaction.description}
-              </CardTitle>
-              <CardDescription>
-                {transaction.referenceNumber} • {party?.name}
-              </CardDescription>
-            </div>
-            <div className="flex items-center space-x-2">
-              {getTypeBadge(transaction.type)}
-              {getStatusBadge(transaction.status)}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Amount</p>
-              <p
-                className={`text-lg font-bold ${credit ? "text-green-600" : "text-blue-600"}`}
-              >
-                {credit ? "+" : ""}
-                {formatCurrency(transaction.amount)}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-sm text-muted-foreground">Transaction Date</p>
-              <p className="font-medium">
-                {new Date(transaction.transactionDate).toLocaleDateString()}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-sm text-muted-foreground">Payment Method</p>
-              <p className="font-medium capitalize">
-                {transaction.paymentMethod || "Not specified"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-sm text-muted-foreground">Related Job</p>
-              <p className="font-medium">
-                {job?.title || "General Transaction"}
-              </p>
-            </div>
-          </div>
-
-          {transaction.dueDate && (
-            <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-              <p className="text-sm text-yellow-800">
-                <strong>Due Date:</strong>{" "}
-                {new Date(transaction.dueDate).toLocaleDateString()}
-              </p>
-            </div>
-          )}
-
-          {transaction.notes && (
-            <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">Notes:</p>
-              <p className="text-sm">{transaction.notes}</p>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              Created {new Date(transaction.createdAt).toLocaleDateString()}
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="sm">
-                <Eye className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm">
-                <Edit className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-red-600 hover:text-red-700"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  // Calculate summary stats
-  const totalIncome = demoTransactions
-    .filter((t) => isCredit(t.type) && t.status === "paid")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalExpenses = demoTransactions
-    .filter((t) => !isCredit(t.type))
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const pendingInvoices = demoTransactions.filter(
-    (t) => t.type === "invoice" && t.status === "pending"
-  ).length;
-
-  const overdueTransactions = demoTransactions.filter(
-    (t) =>
-      t.dueDate && new Date(t.dueDate) < new Date() && t.status === "pending"
-  ).length;
+  }
 
   return (
-    <div className="p-6 space-y-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
             Financial Transactions
           </h1>
-          <p className="text-gray-600">
-            Track payments, invoices, and financial activities
+          <p className="text-gray-600 mt-2">
+            Manage all financial transactions and entries
           </p>
+          <div className="mt-2">
+            <DatabaseConnectionStatus variant="compact" />
+          </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <Button variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={fetchTransactions}
+            className="bg-white shadow-md"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
           </Button>
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
+          <Button className="bg-gradient-to-r from-blue-500 to-green-600 text-white shadow-lg">
+            <Plus className="h-4 w-4 mr-2" />
             New Transaction
           </Button>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Income</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(totalIncome)}
-            </div>
-            <p className="text-xs text-muted-foreground">Received payments</p>
-          </CardContent>
-        </Card>
+      {/* Summary Stats */}
+      {summary && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            title="Total Transactions"
+            value={summary.totalTransactions}
+            icon={FileText}
+            color="text-blue-600"
+          />
+          <StatCard
+            title="Total Amount"
+            value={formatCurrency(summary.totalAmount)}
+            icon={DollarSign}
+            color="text-green-600"
+          />
+          <StatCard
+            title="Pending Approval"
+            value={summary.pending}
+            icon={AlertTriangle}
+            color="text-yellow-600"
+          />
+          <StatCard
+            title="Approved"
+            value={summary.approved}
+            icon={Check}
+            color="text-green-600"
+          />
+        </div>
+      )}
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Invoices
-            </CardTitle>
-            <FileText className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {formatCurrency(totalExpenses)}
-            </div>
-            <p className="text-xs text-muted-foreground">Invoiced amount</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Pending Invoices
-            </CardTitle>
-            <FileText className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
-              {pendingInvoices}
-            </div>
-            <p className="text-xs text-muted-foreground">Awaiting payment</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {overdueTransactions}
-            </div>
-            <p className="text-xs text-muted-foreground">Past due date</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <Card>
+      {/* Filters and Search */}
+      <Card className="shadow-md">
         <CardHeader>
-          <CardTitle>Filter & Search</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filters & Search
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 placeholder="Search transactions..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-9"
               />
             </div>
 
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Transaction Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="invoice">Invoices</SelectItem>
-                <SelectItem value="payment">Payments</SelectItem>
-                <SelectItem value="credit">Credits</SelectItem>
-                <SelectItem value="debit">Debits</SelectItem>
-              </SelectContent>
-            </Select>
-
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Status" />
+                <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="APPROVED">Approved</SelectItem>
+                <SelectItem value="REJECTED">Rejected</SelectItem>
+                <SelectItem value="CANCELLED">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="JOB_SHEET">Job Sheet</SelectItem>
+                <SelectItem value="INVOICE">Invoice</SelectItem>
+                <SelectItem value="PAYMENT">Payment</SelectItem>
+                <SelectItem value="EXPENSE">Expense</SelectItem>
               </SelectContent>
             </Select>
 
             <Select value={dateRange} onValueChange={setDateRange}>
               <SelectTrigger>
-                <SelectValue placeholder="Date Range" />
+                <SelectValue placeholder="Date range" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
                 <SelectItem value="week">This Week</SelectItem>
                 <SelectItem value="month">This Month</SelectItem>
                 <SelectItem value="quarter">This Quarter</SelectItem>
+                <SelectItem value="year">This Year</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Transactions List */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">
-            Transactions ({filteredTransactions.length})
-          </h2>
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm">
-              <Filter className="mr-2 h-4 w-4" />
-              Advanced Filters
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid gap-4">
-          {filteredTransactions.length > 0 ? (
-            filteredTransactions.map((transaction) => (
-              <TransactionCard key={transaction.id} transaction={transaction} />
-            ))
-          ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <DollarSign className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">
-                  No transactions found
-                </h3>
-                <p className="text-muted-foreground text-center mb-4">
-                  No transactions match your search criteria. Try adjusting your
-                  filters.
-                </p>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Transaction
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-
-      {/* Transactions Table View */}
-      <Card>
+      {/* Transactions Table */}
+      <Card className="shadow-md">
         <CardHeader>
-          <CardTitle>Transactions Table</CardTitle>
-          <CardDescription>
-            Detailed view of all financial transactions
-          </CardDescription>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Transaction History
+            </span>
+            <Button variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Transaction</TableHead>
-                <TableHead>Party</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTransactions.slice(0, 10).map((transaction) => {
-                const party = getPartyById(transaction.partyId);
-                const credit = isCredit(transaction.type);
-
-                return (
-                  <TableRow key={transaction.id}>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Transaction #</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Party</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTransactions.map((transaction) => (
+                  <TableRow key={transaction.id} className="hover:bg-gray-50">
+                    <TableCell className="font-medium">
+                      {transaction.transaction_number}
+                    </TableCell>
                     <TableCell>
-                      <div>
-                        <p className="font-medium">{transaction.description}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {transaction.referenceNumber}
-                        </p>
+                      {formatDate(transaction.transaction_date)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getTypeIcon(transaction.reference_type)}
+                        <span className="text-sm">
+                          {transaction.reference_type.replace("_", " ")}
+                        </span>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center">
-                        <Building className="w-4 h-4 mr-2 text-muted-foreground" />
-                        {party?.name}
-                      </div>
+                    <TableCell className="max-w-md truncate">
+                      {transaction.description}
                     </TableCell>
-                    <TableCell>{getTypeBadge(transaction.type)}</TableCell>
-                    <TableCell>
-                      <span
-                        className={`font-medium ${credit ? "text-green-600" : "text-blue-600"}`}
-                      >
-                        {credit ? "+" : ""}
-                        {formatCurrency(transaction.amount)}
-                      </span>
+                    <TableCell>{transaction.parties?.name || "—"}</TableCell>
+                    <TableCell
+                      className={`text-right font-bold ${getAmountColor(transaction.total_amount)}`}
+                    >
+                      {transaction.total_amount >= 0 ? "+" : "-"}
+                      {formatCurrency(transaction.total_amount)}
                     </TableCell>
                     <TableCell>
-                      {new Date(
-                        transaction.transactionDate
-                      ).toLocaleDateString()}
+                      <Badge className={getStatusColor(transaction.status)}>
+                        {transaction.status}
+                      </Badge>
                     </TableCell>
-                    <TableCell>{getStatusBadge(transaction.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </div>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedTransaction(transaction);
+                              setShowDetails(true);
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </DropdownMenuItem>
+                          {transaction.status === "PENDING" && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleStatusUpdate(transaction.id, "APPROVED")
+                                }
+                              >
+                                <Check className="h-4 w-4 mr-2" />
+                                Approve
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleStatusUpdate(transaction.id, "REJECTED")
+                                }
+                              >
+                                <X className="h-4 w-4 mr-2" />
+                                Reject
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between mt-6">
+            <div className="text-sm text-gray-600">
+              Showing {filteredTransactions.length} of{" "}
+              {summary?.totalTransactions || 0} transactions
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-gray-600">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                }
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Transaction Details Dialog */}
+      <Dialog open={showDetails} onOpenChange={setShowDetails}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Transaction Details</DialogTitle>
+            <DialogDescription>
+              View complete transaction information and audit trail
+            </DialogDescription>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Transaction Number
+                  </label>
+                  <p className="font-mono">
+                    {selectedTransaction.transaction_number}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Date
+                  </label>
+                  <p>{formatDate(selectedTransaction.transaction_date)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Type
+                  </label>
+                  <p>{selectedTransaction.reference_type.replace("_", " ")}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Status
+                  </label>
+                  <Badge className={getStatusColor(selectedTransaction.status)}>
+                    {selectedTransaction.status}
+                  </Badge>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-600">
+                    Description
+                  </label>
+                  <p>{selectedTransaction.description}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Amount
+                  </label>
+                  <p
+                    className={`text-lg font-bold ${getAmountColor(selectedTransaction.total_amount)}`}
+                  >
+                    {selectedTransaction.total_amount >= 0 ? "+" : "-"}
+                    {formatCurrency(selectedTransaction.total_amount)}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Party
+                  </label>
+                  <p>{selectedTransaction.parties?.name || "—"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

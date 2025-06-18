@@ -391,7 +391,7 @@ const getRoleBasedNavigation = (userRole: string): NavItem[] => {
           title: "Dashboard",
           href: "/dashboard/finance",
           icon: LayoutDashboard,
-          description: "Financial overview",
+          description: "Financial overview & KPIs",
         },
         {
           title: "Financial Management",
@@ -401,25 +401,31 @@ const getRoleBasedNavigation = (userRole: string): NavItem[] => {
               title: "Transactions",
               href: "/finance/transactions",
               icon: CreditCard,
-              description: "Payment transactions",
+              description: "All financial transactions",
             },
             {
               title: "Invoices",
               href: "/finance/invoices",
               icon: FileText,
-              description: "Invoice management",
+              description: "Invoice management & tracking",
+            },
+            {
+              title: "Payments",
+              href: "/finance/payments",
+              icon: Receipt,
+              description: "Payment tracking & receipts",
             },
             {
               title: "Expenses",
-              href: "/expenses",
+              href: "/finance/expenses",
               icon: Receipt,
-              description: "Expense tracking",
+              description: "Expense management & tracking",
             },
             {
-              title: "Financial Reports",
-              href: "/finance/reports",
-              icon: BarChart3,
-              description: "Financial analytics",
+              title: "Budgets",
+              href: "/finance/budgets",
+              icon: Target,
+              description: "Budget planning & monitoring",
             },
           ],
         },
@@ -431,61 +437,61 @@ const getRoleBasedNavigation = (userRole: string): NavItem[] => {
               title: "All Parties",
               href: "/parties",
               icon: Building,
-              description: "Customer accounts",
+              description: "Customer & supplier accounts",
+            },
+            {
+              title: "Add Party",
+              href: "/parties/create",
+              icon: Building2,
+              description: "Add new customers/suppliers",
             },
             {
               title: "CRM System",
               href: "/crm",
               icon: Users,
-              description: "Customer relationships",
+              description: "Customer relationship management",
             },
             {
-              title: "Party Reports",
-              href: "/parties/reports",
-              icon: BarChart3,
-              description: "Customer financial reports",
-            },
-          ],
-        },
-        {
-          title: "Inventory",
-          icon: Package,
-          items: [
-            {
-              title: "All Items",
-              href: "/inventory",
-              icon: Package,
-              description: "Inventory valuation",
-            },
-            {
-              title: "Stock Movements",
-              href: "/inventory/movements",
+              title: "Receivables",
+              href: "/finance/receivables",
               icon: TrendingUp,
-              description: "Cost tracking",
-            },
-            {
-              title: "Suppliers",
-              href: "/inventory/suppliers",
-              icon: Building2,
-              description: "Supplier payments",
-            },
-            {
-              title: "Purchase Orders",
-              href: "/inventory/orders",
-              icon: FileText,
-              description: "Purchase management",
+              description: "Accounts receivable management",
             },
           ],
         },
         {
-          title: "Reports",
+          title: "Financial Reports",
           icon: BarChart3,
           items: [
             {
-              title: "Financial Reports",
-              href: "/reports",
+              title: "Profit & Loss",
+              href: "/finance/reports/profit-loss",
+              icon: TrendingUp,
+              description: "P&L statements",
+            },
+            {
+              title: "Balance Sheet",
+              href: "/finance/reports/balance-sheet",
+              icon: PieChart,
+              description: "Balance sheet reports",
+            },
+            {
+              title: "Cash Flow",
+              href: "/finance/reports/cash-flow",
+              icon: DollarSign,
+              description: "Cash flow analysis",
+            },
+            {
+              title: "Tax Reports",
+              href: "/finance/reports/tax",
+              icon: FileText,
+              description: "Tax compliance reports",
+            },
+            {
+              title: "Custom Reports",
+              href: "/finance/reports/custom",
               icon: BarChart3,
-              description: "Financial analytics",
+              description: "Custom financial analytics",
             },
           ],
         },
@@ -539,38 +545,46 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
 
   // Simple effect to auto-expand based on current route
   React.useEffect(() => {
-    const newExpanded = ["Dashboard"];
+    setExpandedItems((prevExpanded) => {
+      const newExpanded = [...prevExpanded];
 
-    // Auto-expand relevant sections based on pathname
+      // Auto-expand relevant sections based on pathname (but preserve manually opened ones)
+      const sectionsToExpand = ["Dashboard"]; // Always keep dashboard expanded
+
     if (pathname.startsWith("/jobs")) {
-      newExpanded.push("Job Management", "My Jobs");
+        sectionsToExpand.push("Job Management", "My Jobs");
     }
     if (
       pathname.startsWith("/machines") ||
       pathname.startsWith("/production")
     ) {
-      newExpanded.push("Production Management", "Production");
+        sectionsToExpand.push("Production Management", "Production");
     }
     if (pathname.startsWith("/parties") || pathname.startsWith("/crm")) {
-      newExpanded.push("Customer Management");
+        sectionsToExpand.push("Customer Management");
     }
     if (pathname.startsWith("/finance") || pathname.startsWith("/expenses")) {
-      newExpanded.push("Financial Management");
+        sectionsToExpand.push("Financial Management");
     }
     if (pathname.startsWith("/inventory")) {
-      newExpanded.push("Inventory Management", "Inventory");
+        sectionsToExpand.push("Inventory Management", "Inventory");
     }
     if (pathname.startsWith("/users")) {
-      newExpanded.push("User Management");
+        sectionsToExpand.push("User Management");
     }
-    if (pathname.startsWith("/reports") || pathname.startsWith("/analytics")) {
-      newExpanded.push("Reports & Analytics", "Reports");
+      if (
+        pathname.startsWith("/reports") ||
+        pathname.startsWith("/analytics")
+      ) {
+        sectionsToExpand.push("Reports & Analytics", "Reports");
     }
     if (pathname.startsWith("/settings")) {
-      newExpanded.push("System Settings");
+        sectionsToExpand.push("System Settings");
     }
 
-    setExpandedItems(newExpanded);
+      // Merge with existing expanded items (don't remove manually opened sections)
+      return Array.from(new Set([...newExpanded, ...sectionsToExpand]));
+    });
   }, [pathname]);
 
   const toggleExpanded = (title: string) => {

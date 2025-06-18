@@ -65,6 +65,7 @@ import {
 } from "lucide-react";
 import DashboardPageLayout from "@/components/layout/DashboardPageLayout";
 import { RoleBasedAccess } from "@/components/auth/RoleBasedAccess";
+import DatabaseConnectionStatus from "@/components/DatabaseConnectionStatus";
 
 interface Customer {
   id: string;
@@ -446,6 +447,9 @@ function CRMPageContent() {
           <p className="text-gray-600">
             Manage customer relationships, leads, and interactions
           </p>
+          <div className="mt-2">
+            <DatabaseConnectionStatus variant="compact" />
+          </div>
         </div>
         <div className="flex space-x-3">
           <Dialog>

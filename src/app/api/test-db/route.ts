@@ -202,8 +202,18 @@ export async function POST(request: NextRequest) {
   console.log("=== TESTING FORM SUBMISSIONS ===");
 
   try {
-    const body = await request.json();
-    const { testType } = body; // 'quotation' or 'jobsheet'
+    let body: any = {};
+    try {
+      const text = await request.text();
+      if (text.trim()) {
+        body = JSON.parse(text);
+      }
+    } catch (parseError) {
+      console.log("Request body is empty or invalid JSON, using defaults");
+      body = { testType: "jobsheet" }; // Default test
+    }
+
+    const { testType = "jobsheet" } = body; // Default to 'jobsheet' if not specified
 
     console.log(`Testing ${testType} form submission:`, body);
 
@@ -241,21 +251,60 @@ export async function POST(request: NextRequest) {
 
       result = { data, error, type: "quotation" };
     } else if (testType === "jobsheet") {
-      // Test job sheet submission
+      // First, get existing party ID and user ID
+      let testPartyId = body.party_id;
+      let testUserId = body.created_by;
+
+      if (!testPartyId) {
+        // Try to get an existing party
+        const { data: existingParties, error: partyError } = await supabase
+          .from("parties")
+          .select("id")
+          .limit(1);
+
+        if (existingParties && existingParties.length > 0) {
+          testPartyId = existingParties[0].id;
+        } else {
+          // No parties exist, we need to skip party_id requirement
+          testPartyId = null;
+        }
+      }
+
+      if (!testUserId) {
+        // Try to get an existing user
+        const { data: existingUsers, error: userError } = await supabase
+          .from("users")
+          .select("id")
+          .limit(1);
+
+        if (existingUsers && existingUsers.length > 0) {
+          testUserId = existingUsers[0].id;
+        } else {
+          // No users exist, use null and let the constraint fail gracefully
+          testUserId = null;
+        }
+      }
+
+      // Test job sheet submission using the actual schema
       const jobSheetData = {
-        job_date: body.job_date || new Date().toISOString().split("T")[0],
-        description: body.description || "Test Job Sheet",
-        sheet: parseInt(body.sheet || "100"),
-        plate: parseInt(body.plate || "2"),
+        job_number: body.job_number || `TEST-${Date.now()}`,
+        title: body.title || "Test Job Sheet",
+        description: body.description || "Test job sheet for API testing",
+        party_id: testPartyId,
+        status: body.status || "pending",
+        priority: parseInt(body.priority || "2"), // 1=high, 2=medium, 3=low
+        quantity: parseInt(body.quantity || "100"),
+        selling_price: parseFloat(body.selling_price || "1000.00"),
+        order_date: body.order_date || new Date().toISOString().split("T")[0],
+        due_date:
+          body.due_date ||
+          new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split("T")[0], // 7 days from now
         size: body.size || "A4",
-        sq_inch: parseFloat(body.sq_inch || "93.50"),
-        paper_sheet: parseInt(body.paper_sheet || "50"),
-        imp: parseInt(body.imp || "2000"),
-        rate: parseFloat(body.rate || "10.00"),
-        printing: parseFloat(body.printing || "500.00"),
-        uv: parseFloat(body.uv || "0.00"),
-        baking: parseFloat(body.baking || "0.00"),
-        file_url: body.file_url || null,
+        estimated_cost: parseFloat(body.estimated_cost || "800.00"),
+        special_instructions: body.special_instructions || "API test job sheet",
+        created_by: testUserId,
       };
 
       const { data, error } = await supabase

@@ -45,6 +45,7 @@ import {
 } from "@/data/demo-data";
 import DashboardPageLayout from "@/components/layout/DashboardPageLayout";
 import { RoleBasedAccess } from "@/components/auth/RoleBasedAccess";
+import DatabaseConnectionStatus from "@/components/DatabaseConnectionStatus";
 
 const PartiesPageContent = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -215,6 +216,9 @@ const PartiesPageContent = () => {
           <p className="text-muted-foreground">
             Manage customer accounts and relationships
           </p>
+          <div className="mt-2">
+            <DatabaseConnectionStatus variant="compact" />
+          </div>
         </div>
         <div className="flex items-center space-x-3">
           <Button variant="outline" size="sm">
